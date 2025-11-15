@@ -16,14 +16,26 @@ const express_1 = __importDefault(require("express"));
 const user_model_1 = __importDefault(require("../models/user.model"));
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = express_1.default.Router();
-// Get all users (admin only)
-router.get('/', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)(['admin']), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+// Get all users (admin only) or students (teacher can access)
+router.get('/', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a, _b;
     try {
-        const users = yield user_model_1.default.find().select('-password');
-        res.json(users);
+        // Teachers can get students, admins can get all users
+        if (((_a = req.user) === null || _a === void 0 ? void 0 : _a.role) === 'teacher') {
+            const students = yield user_model_1.default.find({ role: 'student' }).select('-password');
+            res.json(students);
+        }
+        else if (((_b = req.user) === null || _b === void 0 ? void 0 : _b.role) === 'admin') {
+            const users = yield user_model_1.default.find().select('-password');
+            res.json(users);
+        }
+        else {
+            return res.status(403).json({ message: 'Access denied' });
+        }
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Get users error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 // Update user
@@ -32,6 +44,10 @@ router.put('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 
     try {
         const { id } = req.params;
         const updates = req.body;
+        // Validate ObjectId
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ message: 'Invalid user ID format' });
+        }
         // Don't allow role updates unless admin
         if (updates.role && ((_a = req.user) === null || _a === void 0 ? void 0 : _a.role) !== 'admin') {
             return res.status(403).json({ message: 'Not authorized to change roles' });
@@ -50,13 +66,18 @@ router.put('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 
         res.json(user);
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('User update error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 // Delete user (admin only)
 router.delete('/:id', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)(['admin']), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
+        // Validate ObjectId
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ message: 'Invalid user ID format' });
+        }
         const user = yield user_model_1.default.findById(id);
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
@@ -65,7 +86,8 @@ router.delete('/:id', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)
         res.json({ message: 'User deleted successfully' });
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('User deletion error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 exports.default = router;

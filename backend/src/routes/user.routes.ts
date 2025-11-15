@@ -4,13 +4,22 @@ import { auth, requireRole } from '../middleware/auth.middleware';
 
 const router = express.Router();
 
-// Get all users (admin only)
-router.get('/', auth, requireRole(['admin']), async (req, res) => {
+// Get all users (admin only) or students (teacher can access)
+router.get('/', auth, async (req, res) => {
   try {
-    const users = await User.find().select('-password');
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+    // Teachers can get students, admins can get all users
+    if (req.user?.role === 'teacher') {
+      const students = await User.find({ role: 'student' }).select('-password');
+      res.json(students);
+    } else if (req.user?.role === 'admin') {
+      const users = await User.find().select('-password');
+      res.json(users);
+    } else {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+  } catch (error: any) {
+    console.error('Get users error:', error.message);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -19,6 +28,11 @@ router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
     
     // Don't allow role updates unless admin
     if (updates.role && req.user?.role !== 'admin') {
@@ -40,8 +54,9 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     res.json(user);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+  } catch (error: any) {
+    console.error('User update error:', error.message);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 
@@ -49,6 +64,11 @@ router.put('/:id', auth, async (req, res) => {
 router.delete('/:id', auth, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Validate ObjectId
+    if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ message: 'Invalid user ID format' });
+    }
     
     const user = await User.findById(id);
     if (!user) {
@@ -57,8 +77,9 @@ router.delete('/:id', auth, requireRole(['admin']), async (req, res) => {
 
     await User.findByIdAndDelete(id);
     res.json({ message: 'User deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
+  } catch (error: any) {
+    console.error('User deletion error:', error.message);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
 

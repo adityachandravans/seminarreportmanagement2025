@@ -15,14 +15,43 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const mongoose_1 = __importDefault(require("mongoose"));
 const user_model_1 = __importDefault(require("../models/user.model"));
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = express_1.default.Router();
 // Register User
 router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        console.log('📥 Register request received at:', new Date().toISOString());
+        console.log('📥 Request headers:', req.headers);
+        console.log('📥 Request body:', JSON.stringify(req.body, null, 2));
         const { email, password, name, role, rollNumber, department, year, specialization } = req.body;
-        console.log('Register request:', { email, name, role });
+        console.log('📥 Register request received:', { email, name, role, hasPassword: !!password });
+        // Check MongoDB connection
+        console.log('📊 MongoDB connection state:', mongoose_1.default.connection.readyState);
+        if (mongoose_1.default.connection.readyState !== 1) {
+            console.error('✗ MongoDB not connected. ReadyState:', mongoose_1.default.connection.readyState);
+            console.error('  ReadyState codes: 0=disconnected, 1=connected, 2=connecting, 3=disconnecting');
+            return res.status(503).json({ message: 'Database connection unavailable' });
+        }
+        console.log('✅ MongoDB is connected');
+        // Input validation
+        if (!email || !password || !name || !role) {
+            return res.status(400).json({ message: 'Missing required fields: email, password, name, role' });
+        }
+        // Email format validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ message: 'Invalid email format' });
+        }
+        // Password validation
+        if (password.length < 6) {
+            return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+        }
+        // Role validation
+        if (!['student', 'teacher', 'admin'].includes(role)) {
+            return res.status(400).json({ message: 'Invalid role. Must be student, teacher, or admin' });
+        }
         // Check if user already exists
         const existingUser = yield user_model_1.default.findOne({ email });
         if (existingUser) {
@@ -43,9 +72,16 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
             specialization
         });
         yield user.save();
-        console.log('User saved:', user._id, email);
+        console.log('✓ User saved to MongoDB:', {
+            id: user._id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            database: user.constructor.name
+        });
         // Create token
         const token = jsonwebtoken_1.default.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '24h' });
+        console.log('✓ Registration successful, returning response');
         res.status(201).json({
             token,
             user: {
@@ -57,7 +93,18 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
         });
     }
     catch (error) {
-        console.error('Registration error:', error.message);
+        console.error('✗ Registration error:', error.message);
+        console.error('✗ Error stack:', error.stack);
+        console.error('✗ Error details:', error);
+        // Handle MongoDB duplicate key error
+        if (error.code === 11000 || error.code === 11001) {
+            return res.status(400).json({ message: 'User with this email already exists' });
+        }
+        // Handle validation errors
+        if (error.name === 'ValidationError') {
+            const validationErrors = Object.values(error.errors).map((err) => err.message);
+            return res.status(400).json({ message: 'Validation error', errors: validationErrors });
+        }
         res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
@@ -65,6 +112,10 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
 router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email, password } = req.body;
+        // Input validation
+        if (!email || !password) {
+            return res.status(400).json({ message: 'Email and password are required' });
+        }
         // Check if user exists
         const user = yield user_model_1.default.findOne({ email });
         if (!user) {
@@ -88,7 +139,8 @@ router.post('/login', (req, res) => __awaiter(void 0, void 0, void 0, function* 
         });
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Login error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 // Get current user
@@ -101,7 +153,8 @@ router.get('/me', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 0
         res.json(user);
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Get current user error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 exports.default = router;

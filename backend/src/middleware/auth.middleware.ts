@@ -15,19 +15,29 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
-      throw new Error();
+      return res.status(401).json({ message: 'Please authenticate' });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    
+    // Validate ObjectId format
+    if (!decoded.userId || !decoded.userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(401).json({ message: 'Invalid token' });
+    }
+
     const user = await User.findById(decoded.userId);
     
     if (!user) {
-      throw new Error();
+      return res.status(401).json({ message: 'Please authenticate' });
     }
 
     req.user = user;
     next();
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+    console.error('Auth middleware error:', error.message);
     res.status(401).json({ message: 'Please authenticate' });
   }
 };

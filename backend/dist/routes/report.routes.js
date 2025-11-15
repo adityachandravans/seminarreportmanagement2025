@@ -22,7 +22,7 @@ const router = express_1.default.Router();
 // Configure multer for file upload
 const storage = multer_1.default.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = 'uploads/reports';
+        const uploadDir = path_1.default.resolve(process.cwd(), 'uploads', 'reports');
         if (!fs_1.default.existsSync(uploadDir)) {
             fs_1.default.mkdirSync(uploadDir, { recursive: true });
         }
@@ -56,37 +56,76 @@ router.get('/', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 0, 
         res.json(reports);
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Get reports error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 // Submit report
-router.post('/', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)(['student']), upload.single('file'), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+router.post('/', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)(['student']), (req, res, next) => {
+    upload.single('file')(req, res, (err) => {
+        if (err instanceof multer_1.default.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ message: 'File too large. Maximum size is 10MB' });
+            }
+            return res.status(400).json({ message: `Upload error: ${err.message}` });
+        }
+        if (err) {
+            return res.status(400).json({ message: err.message || 'File upload error' });
+        }
+        next();
+    });
+}, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
         if (!req.file) {
             return res.status(400).json({ message: 'No file uploaded' });
         }
         const { title, topicId } = req.body;
+        // Input validation
+        if (!title || !topicId) {
+            return res.status(400).json({ message: 'Title and topicId are required' });
+        }
+        // Validate ObjectId
+        if (!topicId.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ message: 'Invalid topicId format' });
+        }
         const report = new report_model_1.default({
             title,
             topicId,
             studentId: (_a = req.user) === null || _a === void 0 ? void 0 : _a._id,
             fileName: req.file.filename,
-            fileSize: req.file.size
+            fileSize: String(req.file.size)
         });
-        yield report.save();
-        res.status(201).json(report);
+        const savedReport = yield report.save();
+        // Populate the report with related data
+        const populatedReport = yield report_model_1.default.findById(savedReport._id)
+            .populate('studentId', 'name email')
+            .populate('teacherId', 'name email')
+            .populate('topicId');
+        console.log('✅ Report saved successfully:', {
+            id: savedReport._id,
+            title: savedReport.title,
+            fileName: savedReport.fileName,
+            studentId: savedReport.studentId
+        });
+        res.status(201).json(populatedReport);
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('✗ Report submission error:', error.message);
+        console.error('✗ Error stack:', error.stack);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 // Update report
 router.put('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     try {
         const { id } = req.params;
         const updates = req.body;
+        // Validate ObjectId
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ message: 'Invalid report ID format' });
+        }
         const report = yield report_model_1.default.findById(id);
         if (!report) {
             return res.status(404).json({ message: 'Report not found' });
@@ -97,28 +136,47 @@ router.put('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 
             report.studentId.toString() !== ((_c = req.user) === null || _c === void 0 ? void 0 : _c._id.toString())) {
             return res.status(403).json({ message: 'Not authorized' });
         }
-        const updatedReport = yield report_model_1.default.findByIdAndUpdate(id, updates, { new: true });
+        // If teacher is reviewing, set teacherId if not already set
+        if ((updates.status === 'reviewed' || updates.status === 'approved') && ((_d = req.user) === null || _d === void 0 ? void 0 : _d.role) === 'teacher' && !updates.teacherId) {
+            updates.teacherId = req.user._id;
+        }
+        const updatedReport = yield report_model_1.default.findByIdAndUpdate(id, updates, { new: true })
+            .populate('studentId', 'name email')
+            .populate('teacherId', 'name email')
+            .populate('topicId');
+        console.log('✅ Report updated successfully:', {
+            id: updatedReport === null || updatedReport === void 0 ? void 0 : updatedReport._id,
+            status: updatedReport === null || updatedReport === void 0 ? void 0 : updatedReport.status,
+            grade: updatedReport === null || updatedReport === void 0 ? void 0 : updatedReport.grade
+        });
         res.json(updatedReport);
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Report update error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 // Download report
 router.get('/:id/download', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const report = yield report_model_1.default.findById(req.params.id);
+        const { id } = req.params;
+        // Validate ObjectId
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ message: 'Invalid report ID format' });
+        }
+        const report = yield report_model_1.default.findById(id);
         if (!report) {
             return res.status(404).json({ message: 'Report not found' });
         }
-        const filePath = path_1.default.join(__dirname, '../../uploads/reports', report.fileName);
+        const filePath = path_1.default.resolve(process.cwd(), 'uploads', 'reports', report.fileName);
         if (!fs_1.default.existsSync(filePath)) {
             return res.status(404).json({ message: 'File not found' });
         }
         res.download(filePath);
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Download error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 // Delete report
@@ -126,6 +184,10 @@ router.delete('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, vo
     var _a, _b;
     try {
         const { id } = req.params;
+        // Validate ObjectId
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({ message: 'Invalid report ID format' });
+        }
         const report = yield report_model_1.default.findById(id);
         if (!report) {
             return res.status(404).json({ message: 'Report not found' });
@@ -136,7 +198,7 @@ router.delete('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, vo
             return res.status(403).json({ message: 'Not authorized' });
         }
         // Delete file from storage
-        const filePath = path_1.default.join(__dirname, '../../uploads/reports', report.fileName);
+        const filePath = path_1.default.resolve(process.cwd(), 'uploads', 'reports', report.fileName);
         if (fs_1.default.existsSync(filePath)) {
             fs_1.default.unlinkSync(filePath);
         }
@@ -144,7 +206,8 @@ router.delete('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, vo
         res.json({ message: 'Report deleted successfully' });
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('Report deletion error:', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 }));
 exports.default = router;

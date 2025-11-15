@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Topic, SeminarReport } from '../types';
 import { topicsAPI, reportsAPI } from '../services/api';
@@ -37,8 +37,8 @@ interface StudentDashboardProps {
 
 export default function StudentDashboard({ 
   user, 
-  topics, 
-  reports, 
+  topics: initialTopics, 
+  reports: initialReports, 
   onLogout, 
   onSubmitTopic, 
   onSubmitReport 
@@ -50,8 +50,32 @@ export default function StudentDashboard({
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [error, setError] = useState('');
 
-  const userTopics = topics.filter(t => t.studentId === user.id);
-  const userReports = reports.filter(r => r.studentId === user.id);
+  const [topicsList, setTopicsList] = useState<Topic[]>(initialTopics || []);
+  const [reportsList, setReportsList] = useState<SeminarReport[]>(initialReports || []);
+
+  // Fetch student's topics on mount and after submissions
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const data = await topicsAPI.getMine();
+        if (mounted) setTopicsList(data || []);
+      } catch (err) {
+        // ignore - will show empty list
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  const userTopics = topicsList.filter(t => {
+    const topicStudentId = typeof t.studentId === 'object' && t.studentId ? (t.studentId as any)?._id : t.studentId;
+    return String(topicStudentId) === String(user.id) || t.studentId === user.id;
+  });
+  const userReports = reportsList.filter(r => {
+    const reportStudentId = typeof r.studentId === 'object' && r.studentId ? (r.studentId as any)?._id : r.studentId;
+    return String(reportStudentId) === String(user.id) || r.studentId === user.id;
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -79,9 +103,17 @@ export default function StudentDashboard({
     setIsSubmittingTopic(true);
     setError('');
     try {
-      await topicsAPI.create({ title: topicForm.title, description: topicForm.description });
-      onSubmitTopic(topicForm);
+      const created = await topicsAPI.create({ title: topicForm.title, description: topicForm.description });
+      // Refresh topic list
+      try {
+        const data = await topicsAPI.getMine();
+        setTopicsList(data || []);
+      } catch (e) {
+        // ignore
+      }
       setTopicForm({ title: '', description: '' });
+      // call callback if parent wants to know
+      onSubmitTopic && onSubmitTopic(topicForm);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to submit topic');
     } finally {
@@ -94,14 +126,41 @@ export default function StudentDashboard({
       setError('Please fill in all fields and select a file');
       return;
     }
+
+    // Validate file type
+    const fileExtension = reportForm.file.name.split('.').pop()?.toLowerCase();
+    const allowedExtensions = ['pdf', 'doc', 'docx'];
+    if (!fileExtension || !allowedExtensions.includes(fileExtension)) {
+      setError('Invalid file type. Please upload PDF, DOC, or DOCX files only.');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    if (reportForm.file.size > maxSize) {
+      setError('File size too large. Maximum size is 10MB.');
+      return;
+    }
+
     setIsSubmittingReport(true);
     setError('');
+    
     try {
-      await reportsAPI.create({
+      console.log('📤 Uploading report:', { 
+        title: reportForm.title, 
+        topicId: reportForm.topicId, 
+        fileName: reportForm.file.name,
+        fileSize: reportForm.file.size 
+      });
+      
+      const newReport = await reportsAPI.create({
         title: reportForm.title,
         topicId: reportForm.topicId,
         file: reportForm.file
       });
+      
+      console.log('✅ Report uploaded successfully:', newReport);
+      
       onSubmitReport({
         title: reportForm.title,
         topicId: reportForm.topicId,
@@ -110,9 +169,11 @@ export default function StudentDashboard({
         feedback: undefined,
         grade: undefined
       });
+      
       setReportForm({ title: '', topicId: '', file: null });
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to upload report');
+      console.error('❌ Error uploading report:', err);
+      setError(err.response?.data?.message || err.message || 'Failed to upload report');
     } finally {
       setIsSubmittingReport(false);
     }
@@ -225,8 +286,8 @@ export default function StudentDashboard({
                           <p className="text-sm text-muted-foreground">Submitted on {topic.submittedAt}</p>
                         </div>
                       </div>
-                      <Badge className={getStatusColor(topic.status)}>
-                        {topic.status}
+                      <Badge className={getStatusColor(topic.status || 'pending')}>
+                        {(topic.status || 'pending').toUpperCase()}
                       </Badge>
                     </motion.div>
                   ))}
@@ -316,9 +377,9 @@ export default function StudentDashboard({
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
                             <h3 className="text-lg font-semibold">{topic.title}</h3>
-                            <Badge className={getStatusColor(topic.status)}>
-                              {getStatusIcon(topic.status)}
-                              <span className="ml-1">{topic.status}</span>
+                            <Badge className={getStatusColor(topic.status || 'pending')}>
+                              {getStatusIcon(topic.status || 'pending')}
+                              <span className="ml-1 capitalize">{(topic.status || 'pending').toUpperCase()}</span>
                             </Badge>
                           </div>
                           <p className="text-muted-foreground mb-4">{topic.description}</p>
@@ -466,7 +527,26 @@ export default function StudentDashboard({
                             </div>
                           )}
                         </div>
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const blob = await reportsAPI.download(report.id);
+                              const url = window.URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = report.fileName;
+                              document.body.appendChild(a);
+                              a.click();
+                              window.URL.revokeObjectURL(url);
+                              document.body.removeChild(a);
+                            } catch (error) {
+                              console.error('Error downloading report:', error);
+                              alert('Failed to download report');
+                            }
+                          }}
+                        >
                           <Download className="h-4 w-4 mr-2" />
                           Download
                         </Button>

@@ -20,27 +20,58 @@ if (!process.env.MONGODB_URI) {
   dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 }
 
+// Validate required environment variables
+if (!process.env.MONGODB_URI) {
+  console.error('✗ Error: MONGODB_URI is required. Please set it in your .env file');
+  process.exit(1);
+}
+
+if (!process.env.JWT_SECRET) {
+  console.error('✗ Error: JWT_SECRET is required. Please set it in your .env file');
+  process.exit(1);
+}
+
 const app: Express = express();
 const port = parseInt(process.env.PORT || '5000', 10);
 
 // Middleware
 // Configure CORS to accept frontend dev server and backend origin(s).
 // Allow multiple origins via comma-separated `CORS_ORIGIN` in .env (e.g. "http://localhost:3000,http://localhost:5000").
-const rawOrigins = process.env.CORS_ORIGIN || '';
+// Default to common development ports if not specified
+const rawOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:5000';
 const allowedOrigins = rawOrigins.split(',').map(s => s.trim()).filter(Boolean);
+
+console.log('✓ CORS allowed origins:', allowedOrigins);
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow non-browser tools (Postman, curl) where origin is undefined
     if (!origin) return callback(null, true);
-    if (allowedOrigins.length === 0) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
+    // Allow all origins in development if CORS_ORIGIN is empty or contains *
+    if (allowedOrigins.length === 0 || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // Log CORS rejection for debugging
+    console.warn('⚠ CORS blocked origin:', origin);
+    return callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    console.log(`📥 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  }
+  next();
+});
 
 // API Routes - MUST BE BEFORE STATIC FILES AND CATCH-ALL ROUTES
 app.use('/api/auth', authRoutes);
@@ -48,9 +79,49 @@ app.use('/api/topics', topicRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
 
+// Log all registered routes
+console.log('✅ Registered API routes:');
+console.log('   POST   /api/auth/register');
+console.log('   POST   /api/auth/login');
+console.log('   GET    /api/auth/me');
+console.log('   GET    /api/topics');
+console.log('   POST   /api/topics');
+console.log('   GET    /api/reports');
+console.log('   POST   /api/reports');
+
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
+  const mongoState = mongoose.connection.readyState;
+  const mongoStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  res.json({ 
+    status: 'ok', 
+    message: 'Server is running',
+    mongodb: {
+      state: mongoState,
+      status: mongoStates[mongoState as keyof typeof mongoStates] || 'unknown',
+      connected: mongoState === 1,
+      database: mongoose.connection.db?.databaseName || 'unknown'
+    },
+    port: port
+  });
+});
+
+// Test endpoint to verify API is working
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    message: 'API is working',
+    timestamp: new Date().toISOString(),
+    mongodb: {
+      connected: mongoose.connection.readyState === 1,
+      database: mongoose.connection.db?.databaseName || 'unknown'
+    }
+  });
 });
 
 // Serve frontend static files if available (check multiple candidate build locations)
@@ -89,15 +160,31 @@ if (frontendDist) {
 
 // Connect to MongoDB and start server
 console.log('Attempting to connect to MongoDB...');
-console.log('MongoDB URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
+console.log('MongoDB URI:', process.env.MONGODB_URI ? 'SET (first 20 chars: ' + process.env.MONGODB_URI.substring(0, 20) + '...)' : 'NOT SET');
+try {
+  if (process.env.MONGODB_URI) {
+    const mongoUrl = new URL(process.env.MONGODB_URI);
+    const dbName = mongoUrl.pathname.slice(1) || 'default';
+    console.log('Database Name:', dbName);
+    console.log('MongoDB Host:', mongoUrl.hostname);
+    console.log('MongoDB Port:', mongoUrl.port || '27017 (default)');
+  }
+} catch (error) {
+  console.log('Note: Could not parse MongoDB URI (might be connection string format)');
+}
 console.log('Port:', port);
 
 mongoose.connect(process.env.MONGODB_URI!, {
-  serverSelectionTimeoutMS: 5000,
+  serverSelectionTimeoutMS: 30000, // Increased to 30 seconds
   socketTimeoutMS: 45000,
+  maxPoolSize: 10,
+  minPoolSize: 2,
 })
   .then(() => {
+    const dbName = mongoose.connection.db?.databaseName || 'unknown';
     console.log('✓ Connected to MongoDB');
+    console.log('✓ Database Name:', dbName);
+    console.log('✓ MongoDB Connection State:', mongoose.connection.readyState === 1 ? 'Connected' : 'Not Connected');
     console.log('Starting Express server listener...');
     
     const server = app.listen(port, '0.0.0.0', () => {
@@ -127,5 +214,11 @@ mongoose.connect(process.env.MONGODB_URI!, {
   })
   .catch((error) => {
     console.error('✗ MongoDB connection error:', error.message);
+    console.error('✗ Error details:', error);
+    console.error('✗ Please check:');
+    console.error('  1. MongoDB is running');
+    console.error('  2. MONGODB_URI in .env file is correct');
+    console.error('  3. Network connectivity to MongoDB server');
+    console.error('  4. MongoDB server is accessible from this machine');
     process.exit(1);
   });

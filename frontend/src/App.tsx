@@ -6,109 +6,176 @@ import AuthPage from './components/AuthPage';
 import StudentDashboard from './components/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
 import AdminDashboard from './components/AdminDashboard';
+import { authAPI, topicsAPI, reportsAPI, usersAPI } from './services/api';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'landing' | 'auth' | 'dashboard'>('landing');
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthMode, setIsAuthMode] = useState<'login' | 'register'>('login');
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [reports, setReports] = useState<SeminarReport[]>([]);
+  const [students, setStudents] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Mock data
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: '1',
-      email: 'student@example.com',
-      password: 'password',
-      name: 'John Student',
-      role: 'student',
-      rollNumber: 'CS2021001',
-      department: 'Computer Science',
-      year: 3
-    },
-    {
-      id: '2',
-      email: 'teacher@example.com',
-      password: 'password',
-      name: 'Dr. Jane Teacher',
-      role: 'teacher',
-      department: 'Computer Science',
-      specialization: 'Machine Learning'
-    },
-    {
-      id: '3',
-      email: 'admin@example.com',
-      password: 'password',
-      name: 'Admin User',
-      role: 'admin'
-    }
-  ]);
-
-  const [topics, setTopics] = useState<Topic[]>([
-    {
-      id: '1',
-      title: 'Machine Learning in Healthcare',
-      description: 'Exploring applications of ML in medical diagnosis',
-      studentId: '1',
-      teacherId: '2',
-      status: 'approved',
-      submittedAt: '2024-01-15',
-      reviewedAt: '2024-01-16'
-    }
-  ]);
-
-  const [reports, setReports] = useState<SeminarReport[]>([
-    {
-      id: '1',
-      title: 'Machine Learning in Healthcare - Final Report',
-      topicId: '1',
-      studentId: '1',
-      teacherId: '2',
-      fileName: 'ml-healthcare-report.pdf',
-      fileSize: '2.5 MB',
-      submittedAt: '2024-02-20',
-      status: 'reviewed',
-      feedback: 'Excellent work! Well researched and presented.',
-      grade: 'A'
-    }
-  ]);
-
-  const handleLogin = (email: string, password: string) => {
-    const user = users.find(u => u.email === email && u.password === password);
-    if (user) {
-      setCurrentUser(user);
-      setCurrentPage('dashboard');
-      return true;
-    }
-    return false;
+  // Helper function to normalize MongoDB _id to id
+  const normalizeTopic = (topic: any): Topic => {
+    return {
+      id: topic._id || topic.id,
+      title: topic.title,
+      description: topic.description,
+      studentId: typeof topic.studentId === 'object' ? (topic.studentId._id || topic.studentId.id) : topic.studentId,
+      teacherId: topic.teacherId ? (typeof topic.teacherId === 'object' ? (topic.teacherId._id || topic.teacherId.id) : topic.teacherId) : undefined,
+      status: topic.status || 'pending',
+      submittedAt: topic.submittedAt || new Date().toISOString().split('T')[0],
+      reviewedAt: topic.reviewedAt,
+      feedback: topic.feedback
+    };
   };
 
-  const handleRegister = (userData: Partial<User>) => {
-    const newUser: User = {
-      id: Date.now().toString(),
-      email: userData.email!,
-      password: userData.password!,
-      name: userData.name!,
-      role: userData.role!,
-      ...(userData.role === 'student' && {
-        rollNumber: userData.rollNumber,
-        department: userData.department,
-        year: userData.year
-      }),
-      ...(userData.role === 'teacher' && {
-        department: userData.department,
-        specialization: userData.specialization
-      })
+  const normalizeReport = (report: any): SeminarReport => {
+    return {
+      id: report._id || report.id,
+      title: report.title,
+      topicId: typeof report.topicId === 'object' ? (report.topicId._id || report.topicId.id) : report.topicId,
+      studentId: typeof report.studentId === 'object' ? (report.studentId._id || report.studentId.id) : report.studentId,
+      teacherId: report.teacherId ? (typeof report.teacherId === 'object' ? (report.teacherId._id || report.teacherId.id) : report.teacherId) : undefined,
+      fileName: report.fileName,
+      fileSize: report.fileSize,
+      submittedAt: report.submittedAt || new Date().toISOString().split('T')[0],
+      status: report.status || 'submitted',
+      feedback: report.feedback,
+      grade: report.grade
     };
-    setUsers([...users, newUser]);
-    setCurrentUser(newUser);
-    setCurrentPage('dashboard');
-    return true;
+  };
+
+  // Load topics, reports, and students from API
+  // NOTE: This function is NOT memoized to avoid re-triggering effects unnecessarily
+  const loadData = async () => {
+    try {
+      const [topicsData, reportsData] = await Promise.all([
+        topicsAPI.getAll(),
+        reportsAPI.getAll()
+      ]);
+      
+      // Normalize MongoDB _id to id for all topics and reports
+      const normalizedTopics = (Array.isArray(topicsData) ? topicsData : []).map(normalizeTopic);
+      const normalizedReports = (Array.isArray(reportsData) ? reportsData : []).map(normalizeReport);
+      
+      setTopics(normalizedTopics);
+      setReports(normalizedReports);
+      
+      // Load students if user is teacher or admin
+      if (currentUser && (currentUser.role === 'teacher' || currentUser.role === 'admin')) {
+        try {
+          const studentsData = await usersAPI.getAll();
+          const normalizedStudents = (Array.isArray(studentsData) ? studentsData : [])
+            .filter((u: any) => u.role === 'student')
+            .map((u: any) => ({
+              ...u,
+              id: u._id || u.id
+            }));
+          setStudents(normalizedStudents);
+        } catch (error) {
+          console.error('Error loading students:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    }
+  };
+
+  // Load user from localStorage on app start (once on mount)
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        const userStr = localStorage.getItem('user');
+        
+        if (token && userStr) {
+          // Verify token is still valid by fetching current user
+          try {
+            const user = await authAPI.getCurrentUser();
+            setCurrentUser(user as User);
+            setCurrentPage('dashboard');
+            // Load data after setting user
+            await loadData();
+          } catch (error) {
+            // Token invalid, clear storage
+            console.error('Token validation failed:', error);
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            setIsLoading(false);
+          }
+        } else {
+          // No token, set loading to false
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error('Error loading user:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadUser();
+    // Only run once on mount, not on dependency changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Separate effect to load data when user changes (explicit refresh only)
+  useEffect(() => {
+    if (currentUser && currentPage === 'dashboard') {
+      loadData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]); // Only depend on user ID, not the entire user object
+
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      // User is already authenticated by AuthPage component
+      // Just navigate to dashboard
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        setCurrentPage('dashboard');
+        await loadData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error in handleLogin:', error);
+      return false;
+    }
+  };
+
+  const handleRegister = async (userData: Partial<User>) => {
+    try {
+      // User is already authenticated by AuthPage component
+      // Just navigate to dashboard
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        setCurrentUser(user);
+        setCurrentPage('dashboard');
+        await loadData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error in handleRegister:', error);
+      return false;
+    }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
     setCurrentUser(null);
     setCurrentPage('landing');
     setSelectedRole(null);
+    setTopics([]);
+    setReports([]);
   };
 
   const handleRoleSelect = (role: UserRole) => {
@@ -127,25 +194,21 @@ export default function App() {
             topics={topics}
             reports={reports}
             onLogout={handleLogout}
-            onSubmitTopic={(topic) => {
-              const newTopic: Topic = {
-                id: Date.now().toString(),
-                ...topic,
-                studentId: currentUser.id,
-                status: 'pending',
-                submittedAt: new Date().toISOString().split('T')[0]
-              };
-              setTopics([...topics, newTopic]);
+            onSubmitTopic={async (topic) => {
+              // Topic is already created in StudentDashboard, just refresh data
+              try {
+                await loadData();
+              } catch (error) {
+                console.error('Error refreshing data after topic submission:', error);
+              }
             }}
-            onSubmitReport={(report) => {
-              const newReport: SeminarReport = {
-                id: Date.now().toString(),
-                ...report,
-                studentId: currentUser.id,
-                submittedAt: new Date().toISOString().split('T')[0],
-                status: 'submitted'
-              };
-              setReports([...reports, newReport]);
+            onSubmitReport={async (report) => {
+              // Report is already created in StudentDashboard, just refresh data
+              try {
+                await loadData();
+              } catch (error) {
+                console.error('Error refreshing data after report submission:', error);
+              }
             }}
           />
         );
@@ -155,29 +218,119 @@ export default function App() {
             user={currentUser}
             topics={topics}
             reports={reports}
-            students={users.filter(u => u.role === 'student')}
+            students={students}
             onLogout={handleLogout}
-            onUpdateTopic={(topicId, updates) => {
-              setTopics(topics.map(t => t.id === topicId ? { ...t, ...updates } : t));
+            onUpdateTopic={async (topicId, updates) => {
+              try {
+                // Ensure topicId is a valid MongoDB ObjectId format
+                let normalizedTopicId = topicId;
+                if (topicId && !topicId.match(/^[0-9a-fA-F]{24}$/)) {
+                  // If it's not a valid ObjectId, try to find the topic by id field
+                  const topic = topics.find(t => t.id === topicId);
+                  if (topic) {
+                    // Use the topic's id which should already be normalized
+                    normalizedTopicId = topic.id;
+                  } else {
+                    throw new Error('Invalid topic ID format');
+                  }
+                }
+                
+                console.log('📝 Updating topic:', { topicId, normalizedTopicId, updates });
+                
+                // Update local state immediately for better UX
+                const currentTopic = topics.find(t => t.id === topicId || t.id === normalizedTopicId);
+                if (currentTopic) {
+                  const updatedTopicLocal = { ...currentTopic, ...updates } as Topic;
+                  setTopics(topics.map(t => (t.id === topicId || t.id === normalizedTopicId) ? updatedTopicLocal : t));
+                }
+                
+                // Then sync with backend
+                const updatedTopic = await topicsAPI.update(normalizedTopicId, updates);
+                const normalizedUpdatedTopic = normalizeTopic(updatedTopic);
+                setTopics(topics.map(t => t.id === normalizedTopicId ? normalizedUpdatedTopic : t));
+              } catch (error: any) {
+                console.error('Error updating topic:', error);
+                alert(error.response?.data?.message || error.message || 'Failed to update topic');
+                // Reload topics to get correct state
+                await loadData();
+              }
             }}
-            onUpdateReport={(reportId, updates) => {
-              setReports(reports.map(r => r.id === reportId ? { ...r, ...updates } : r));
+            onUpdateReport={async (reportId, updates) => {
+              try {
+                // Ensure reportId is a valid MongoDB ObjectId format
+                let normalizedReportId = reportId;
+                if (reportId && !reportId.match(/^[0-9a-fA-F]{24}$/)) {
+                  // If it's not a valid ObjectId, try to find the report by id field
+                  const report = reports.find(r => r.id === reportId);
+                  if (report) {
+                    normalizedReportId = report.id;
+                  } else {
+                    throw new Error('Invalid report ID format');
+                  }
+                }
+                
+                // Update local state immediately for better UX
+                const currentReport = reports.find(r => r.id === reportId || r.id === normalizedReportId);
+                if (currentReport) {
+                  const updatedReportLocal = { ...currentReport, ...updates } as SeminarReport;
+                  setReports(reports.map(r => (r.id === reportId || r.id === normalizedReportId) ? updatedReportLocal : r));
+                }
+                
+                // Then sync with backend
+                const updatedReport = await reportsAPI.update(normalizedReportId, updates);
+                const normalizedUpdatedReport = normalizeReport(updatedReport);
+                setReports(reports.map(r => r.id === normalizedReportId ? normalizedUpdatedReport : r));
+              } catch (error: any) {
+                console.error('Error updating report:', error);
+                alert(error.response?.data?.message || error.message || 'Failed to update report');
+                // Reload reports to get correct state
+                await loadData();
+              }
             }}
           />
         );
-      case 'admin':
+        case 'admin':
         return (
           <AdminDashboard
             user={currentUser}
-            users={users}
+            users={students}
             topics={topics}
             reports={reports}
             onLogout={handleLogout}
-            onUpdateUser={(userId, updates) => {
-              setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
+            onUpdateUser={async (userId, updates) => {
+              try {
+                console.log('📝 Admin updating user:', userId, updates);
+                const updatedUser = await usersAPI.update(userId, updates);
+                
+                // Update local student list
+                setStudents(students.map(u => u.id === userId ? { ...updatedUser, id: updatedUser._id || updatedUser.id } : u));
+                
+                // Refresh all data to ensure consistency
+                await loadData();
+                alert('User updated successfully');
+              } catch (error: any) {
+                console.error('Error updating user:', error);
+                alert(error.response?.data?.message || error.message || 'Failed to update user');
+              }
             }}
-            onDeleteUser={(userId) => {
-              setUsers(users.filter(u => u.id !== userId));
+            onDeleteUser={async (userId) => {
+              try {
+                if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                  return;
+                }
+                console.log('🗑️ Admin deleting user:', userId);
+                await usersAPI.delete(userId);
+                
+                // Remove from local state
+                setStudents(students.filter(u => u.id !== userId));
+                
+                // Refresh all data
+                await loadData();
+                alert('User deleted successfully');
+              } catch (error: any) {
+                console.error('Error deleting user:', error);
+                alert(error.response?.data?.message || error.message || 'Failed to delete user');
+              }
             }}
           />
         );
@@ -185,6 +338,17 @@ export default function App() {
         return null;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">

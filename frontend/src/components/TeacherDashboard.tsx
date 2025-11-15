@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { User, Topic, SeminarReport } from '../types';
+import { topicsAPI, reportsAPI } from '../services/api';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
@@ -53,7 +54,8 @@ export default function TeacherDashboard({
   const [grade, setGrade] = useState('');
 
   const pendingTopics = topics.filter(t => t.status === 'pending');
-  const assignedReports = reports.filter(r => r.teacherId === user.id);
+  // For teachers, show all reports (they can review any submitted report)
+  const assignedReports = reports; // Teachers can see all reports
   const pendingReports = assignedReports.filter(r => r.status === 'submitted');
 
   const filteredStudents = students.filter(student =>
@@ -80,31 +82,69 @@ export default function TeacherDashboard({
     }
   };
 
-  const handleTopicReview = (topicId: string, status: 'approved' | 'rejected', feedback?: string) => {
-    onUpdateTopic(topicId, {
-      status,
-      feedback,
-      reviewedAt: new Date().toISOString().split('T')[0],
-      teacherId: user.id
-    });
-    setSelectedTopic(null);
-    setFeedback('');
+  const handleTopicReview = async (topicId: string, status: 'approved' | 'rejected', feedback?: string) => {
+    try {
+      console.log('📝 Reviewing topic:', { topicId, status, feedback });
+      const updatedTopic = await topicsAPI.update(topicId, {
+        status,
+        feedback: feedback || undefined,
+        reviewedAt: new Date().toISOString().split('T')[0],
+        teacherId: user.id
+      });
+      console.log('✅ Topic reviewed successfully:', updatedTopic);
+      onUpdateTopic(topicId, updatedTopic);
+      setSelectedTopic(null);
+      setFeedback('');
+    } catch (error: any) {
+      console.error('❌ Error reviewing topic:', error);
+      alert(error.response?.data?.message || 'Failed to review topic');
+    }
   };
 
-  const handleReportReview = (reportId: string) => {
-    onUpdateReport(reportId, {
-      status: 'reviewed',
-      feedback,
-      grade,
-      teacherId: user.id
-    });
-    setSelectedReport(null);
-    setFeedback('');
-    setGrade('');
+  const handleReportReview = async (reportId: string) => {
+    try {
+      if (!grade || !feedback) {
+        alert('Please provide both grade and feedback');
+        return;
+      }
+      console.log('📝 Reviewing report:', { reportId, feedback, grade });
+      const updatedReport = await reportsAPI.update(reportId, {
+        status: 'reviewed',
+        feedback,
+        grade,
+        teacherId: user.id
+      });
+      console.log('✅ Report reviewed successfully:', updatedReport);
+      onUpdateReport(reportId, updatedReport);
+      setSelectedReport(null);
+      setFeedback('');
+      setGrade('');
+    } catch (error: any) {
+      console.error('❌ Error reviewing report:', error);
+      alert(error.response?.data?.message || 'Failed to review report');
+    }
   };
 
   const getStudentInfo = (studentId: string) => {
-    return students.find(s => s.id === studentId);
+    // Try to find in students array
+    let student = students.find(s => s.id === studentId);
+    
+    // If not found, try to get from populated topic/report data
+    if (!student) {
+      const topicWithStudent = topics.find(t => t.studentId === studentId);
+      if (topicWithStudent && (topicWithStudent as any).studentId && typeof (topicWithStudent as any).studentId === 'object') {
+        const studentData = (topicWithStudent as any).studentId;
+        student = {
+          id: studentData._id || studentId,
+          name: studentData.name || 'Unknown',
+          email: studentData.email || '',
+          role: 'student' as const,
+          password: ''
+        };
+      }
+    }
+    
+    return student;
   };
 
   return (
@@ -201,7 +241,8 @@ export default function TeacherDashboard({
                   <h3 className="text-lg font-semibold mb-4">Pending Topic Reviews</h3>
                   <div className="space-y-3">
                     {pendingTopics.slice(0, 3).map((topic, index) => {
-                      const student = getStudentInfo(topic.studentId);
+                      const topicStudentId = typeof topic.studentId === 'object' ? (topic.studentId as any)?._id : topic.studentId;
+                      const student = getStudentInfo(topicStudentId || topic.studentId);
                       return (
                         <motion.div
                           key={topic.id}
@@ -227,7 +268,8 @@ export default function TeacherDashboard({
                   <h3 className="text-lg font-semibold mb-4">Pending Report Reviews</h3>
                   <div className="space-y-3">
                     {pendingReports.slice(0, 3).map((report, index) => {
-                      const student = getStudentInfo(report.studentId);
+                      const reportStudentId = typeof report.studentId === 'object' ? (report.studentId as any)?._id : report.studentId;
+                      const student = getStudentInfo(reportStudentId || report.studentId);
                       return (
                         <motion.div
                           key={report.id}
@@ -267,10 +309,13 @@ export default function TeacherDashboard({
 
               <div className="grid gap-4">
                 {topics.map((topic, index) => {
-                  const student = getStudentInfo(topic.studentId);
+                  const topicStudentId = typeof topic.studentId === 'object' ? (topic.studentId as any)?._id : topic.studentId;
+                  const student = getStudentInfo(topicStudentId || topic.studentId);
+                  // Ensure we have a valid topic ID
+                  const topicId = topic.id || topic._id || (topic as any)?._id;
                   return (
                     <motion.div
-                      key={topic.id}
+                      key={topicId}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.1 }}
@@ -304,7 +349,7 @@ export default function TeacherDashboard({
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleTopicReview(topic.id, 'approved')}
+                                  onClick={async () => await handleTopicReview(topicId, 'approved')}
                                   className="text-green-600 border-green-600 hover:bg-green-50"
                                 >
                                   <CheckCircle className="h-4 w-4 mr-1" />
@@ -346,7 +391,8 @@ export default function TeacherDashboard({
 
               <div className="grid gap-4">
                 {assignedReports.map((report, index) => {
-                  const student = getStudentInfo(report.studentId);
+                  const reportStudentId = typeof report.studentId === 'object' ? (report.studentId as any)?._id : report.studentId;
+                  const student = getStudentInfo(reportStudentId || report.studentId);
                   return (
                     <motion.div
                       key={report.id}
@@ -385,7 +431,26 @@ export default function TeacherDashboard({
                             )}
                           </div>
                           <div className="flex space-x-2">
-                            <Button variant="outline" size="sm">
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const blob = await reportsAPI.download(report.id);
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = report.fileName;
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  window.URL.revokeObjectURL(url);
+                                  document.body.removeChild(a);
+                                } catch (error) {
+                                  console.error('Error downloading report:', error);
+                                  alert('Failed to download report');
+                                }
+                              }}
+                            >
                               <Download className="h-4 w-4 mr-1" />
                               Download
                             </Button>
@@ -430,8 +495,14 @@ export default function TeacherDashboard({
 
               <div className="grid gap-4">
                 {filteredStudents.map((student, index) => {
-                  const studentTopics = topics.filter(t => t.studentId === student.id);
-                  const studentReports = reports.filter(r => r.studentId === student.id);
+                  const studentTopics = topics.filter(t => {
+                    const topicStudentId = typeof t.studentId === 'object' ? (t.studentId as any)?._id : t.studentId;
+                    return topicStudentId === student.id || String(t.studentId) === String(student.id);
+                  });
+                  const studentReports = reports.filter(r => {
+                    const reportStudentId = typeof r.studentId === 'object' ? (r.studentId as any)?._id : r.studentId;
+                    return reportStudentId === student.id || String(r.studentId) === String(student.id);
+                  });
                   
                   return (
                     <motion.div
@@ -533,14 +604,20 @@ export default function TeacherDashboard({
               </div>
               <div className="flex space-x-2">
                 <Button
-                  onClick={() => handleTopicReview(selectedTopic.id, 'approved', feedback)}
+                  onClick={async () => {
+                    const topicId = selectedTopic.id || (selectedTopic as any)?._id;
+                    await handleTopicReview(topicId, 'approved', feedback || undefined);
+                  }}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                 >
                   <CheckCircle className="h-4 w-4 mr-2" />
                   Approve
                 </Button>
                 <Button
-                  onClick={() => handleTopicReview(selectedTopic.id, 'rejected', feedback)}
+                  onClick={async () => {
+                    const topicId = selectedTopic.id || (selectedTopic as any)?._id;
+                    await handleTopicReview(topicId, 'rejected', feedback || undefined);
+                  }}
                   disabled={!feedback}
                   variant="destructive"
                   className="flex-1"
@@ -601,7 +678,7 @@ export default function TeacherDashboard({
                 />
               </div>
               <Button
-                onClick={() => handleReportReview(selectedReport.id)}
+                onClick={async () => await handleReportReview(selectedReport.id)}
                 disabled={!grade || !feedback}
                 className="w-full bg-gradient-to-r from-green-500 to-teal-600 text-white"
               >

@@ -1,12 +1,16 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// Get API URL from environment variable or use default
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+console.log('🔗 API Base URL:', API_BASE_URL);
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 seconds timeout
 });
 
 // Add JWT token to every request
@@ -16,7 +20,30 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
+}, (error) => {
+  console.error('❌ Request error:', error);
+  return Promise.reject(error);
 });
+
+// Handle authentication errors
+apiClient.interceptors.response.use(
+  (response) => {
+    return response;
+  },
+  (error: AxiosError) => {
+    if (error.response?.status === 401 || error.response?.status! >= 500) {
+      console.error(`❌ ${error.config?.method?.toUpperCase()} ${error.config?.url} - Status: ${error.response?.status}`, error.response?.data);
+    }
+    
+    if (error.response?.status === 401) {
+      // Token expired or invalid, clear storage and redirect to login
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Auth endpoints
 export const authAPI = {
@@ -51,6 +78,10 @@ export const topicsAPI = {
     const response = await apiClient.get('/topics');
     return response.data;
   },
+  getMine: async () => {
+    const response = await apiClient.get('/topics/mine');
+    return response.data;
+  },
 
   create: async (data: { title: string; description: string }) => {
     const response = await apiClient.post('/topics', data);
@@ -80,9 +111,21 @@ export const reportsAPI = {
     formData.append('title', data.title);
     formData.append('topicId', data.topicId);
     formData.append('file', data.file);
+    
     // Do NOT set the Content-Type header manually when sending FormData with axios.
     // Let axios/browser set the correct multipart boundary for you.
-    const response = await apiClient.post('/reports', formData);
+    // Create a new request config without Content-Type header
+    const config = {
+      timeout: 60000, // 60 seconds timeout for file upload
+      headers: {
+        ...apiClient.defaults.headers.common,
+        // Remove Content-Type to let browser set it with boundary
+      },
+    };
+    // Remove Content-Type if it exists
+    delete (config.headers as any)['Content-Type'];
+    
+    const response = await apiClient.post('/reports', formData, config);
     return response.data;
   },
 

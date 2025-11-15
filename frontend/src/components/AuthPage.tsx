@@ -12,8 +12,8 @@ import { authAPI } from '../services/api';
 interface AuthPageProps {
   role: UserRole;
   mode: 'login' | 'register';
-  onLogin: (email: string, password: string) => boolean;
-  onRegister: (userData: any) => boolean;
+  onLogin: (email: string, password: string) => Promise<boolean>;
+  onRegister: (userData: any) => Promise<boolean>;
   onModeChange: (mode: 'login' | 'register') => void;
   onBack: () => void;
 }
@@ -47,10 +47,13 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
 
     try {
       if (mode === 'login') {
+        console.log('🔐 Attempting login for:', formData.email);
         const response = await authAPI.login(formData.email, formData.password);
+        console.log('✅ Login successful:', response);
         localStorage.setItem('authToken', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
-        onLogin(formData.email, formData.password);
+        // Call onLogin to navigate to dashboard
+        await onLogin(formData.email, formData.password);
       } else {
         const registerData = {
           email: formData.email,
@@ -62,13 +65,32 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
           year: formData.year ? parseInt(formData.year) : undefined,
           specialization: formData.specialization || undefined
         };
+        console.log('📝 Attempting registration:', { email: registerData.email, name: registerData.name, role: registerData.role });
+        console.log('📤 Sending registration data:', JSON.stringify(registerData, null, 2));
         const response = await authAPI.register(registerData);
+        console.log('✅ Registration successful:', response);
         localStorage.setItem('authToken', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
-        onRegister(registerData);
+        // Call onRegister to navigate to dashboard
+        await onRegister(registerData);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'An error occurred');
+      console.error('❌ Authentication error:', err);
+      console.error('❌ Error response:', err.response);
+      console.error('❌ Error message:', err.message);
+      console.error('❌ Error data:', err.response?.data);
+      
+      const errorMessage = err.response?.data?.message || err.message || 'An error occurred';
+      setError(errorMessage);
+      
+      // Log specific error types
+      if (err.code === 'ERR_NETWORK') {
+        setError('Network error: Could not connect to server. Please check if the backend is running.');
+      } else if (err.response?.status === 503) {
+        setError('Database connection unavailable. Please check MongoDB connection.');
+      } else if (err.response?.status === 500) {
+        setError('Server error: ' + errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }

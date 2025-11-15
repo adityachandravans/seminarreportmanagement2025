@@ -20,17 +20,25 @@ const auth = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () 
     try {
         const token = (_a = req.header('Authorization')) === null || _a === void 0 ? void 0 : _a.replace('Bearer ', '');
         if (!token) {
-            throw new Error();
+            return res.status(401).json({ message: 'Please authenticate' });
         }
         const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
+        // Validate ObjectId format
+        if (!decoded.userId || !decoded.userId.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(401).json({ message: 'Invalid token' });
+        }
         const user = yield user_model_1.default.findById(decoded.userId);
         if (!user) {
-            throw new Error();
+            return res.status(401).json({ message: 'Please authenticate' });
         }
         req.user = user;
         next();
     }
     catch (error) {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+            return res.status(401).json({ message: 'Invalid or expired token' });
+        }
+        console.error('Auth middleware error:', error.message);
         res.status(401).json({ message: 'Please authenticate' });
     }
 });
