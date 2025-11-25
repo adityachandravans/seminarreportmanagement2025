@@ -9,15 +9,29 @@ import topicRoutes from './routes/topic.routes';
 import reportRoutes from './routes/report.routes';
 import userRoutes from './routes/user.routes';
 
-// Load .env file from the backend directory
-// Use process.cwd() to find backend/.env from current working directory
-const envPath = path.resolve(process.cwd(), 'backend', '.env');
-dotenv.config({ path: envPath });
+// Load environment variables
+// This tries, in order:
+// 1) backend/.env relative to this file
+// 2) .env in the current working directory
+// 3) backend/.env in the current working directory (monorepo root)
+const candidateEnvPaths = [
+  path.resolve(__dirname, '..', '.env'),                // backend/.env when running from backend
+  path.resolve(process.cwd(), '.env'),                  // project-root/.env
+  path.resolve(process.cwd(), 'backend', '.env'),       // project-root/backend/.env
+];
 
-// Fallback if env file not found
-if (!process.env.MONGODB_URI) {
-  console.warn('Warning: MONGODB_URI not set. Trying root-level .env');
-  dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+let loadedEnvPath: string | null = null;
+for (const p of candidateEnvPaths) {
+  if (fs.existsSync(p)) {
+    dotenv.config({ path: p });
+    loadedEnvPath = p;
+    console.log('✓ Loaded environment from', p);
+    break;
+  }
+}
+
+if (!loadedEnvPath) {
+  console.warn('⚠️  No .env file found in expected locations. Using process.env only.');
 }
 
 // Validate required environment variables

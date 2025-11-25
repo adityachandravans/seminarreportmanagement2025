@@ -2,15 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Topic, SeminarReport } from '../types';
 import { topicsAPI, reportsAPI } from '../services/api';
+import { normalizeTopic, normalizeReport } from '../utils/normalize';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Progress } from './ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { 
   Plus, 
   Upload, 
@@ -49,24 +51,54 @@ export default function StudentDashboard({
   const [isSubmittingTopic, setIsSubmittingTopic] = useState(false);
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   const [error, setError] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+
+  // Clear error when dialogs open
+  const handleDialogOpen = (dialogType: 'topic' | 'report') => {
+    setError('');
+    if (dialogType === 'topic') {
+      setIsDialogOpen(true);
+    } else {
+      setIsReportDialogOpen(true);
+    }
+  };
 
   const [topicsList, setTopicsList] = useState<Topic[]>(initialTopics || []);
   const [reportsList, setReportsList] = useState<SeminarReport[]>(initialReports || []);
+  const [rawTopicsData, setRawTopicsData] = useState<any[]>([]);
 
-  // Fetch student's topics on mount and after submissions
+  // Fetch student's topics and reports on mount
   useEffect(() => {
     let mounted = true;
-    const load = async () => {
+    const loadData = async () => {
       try {
-        const data = await topicsAPI.getMine();
-        if (mounted) setTopicsList(data || []);
+        // Load topics
+        const topicsData = await topicsAPI.getMine();
+        if (mounted && topicsData) {
+          console.log('🔍 Raw topics data from API:', topicsData);
+          const rawArray = Array.isArray(topicsData) ? topicsData : [];
+          setRawTopicsData(rawArray); // Store raw data for ObjectId lookup
+          const normalized = rawArray.map(normalizeTopic);
+          console.log('🔍 Normalized topics:', normalized);
+          setTopicsList(normalized);
+        }
+        
+        // Load reports
+        const reportsData = await reportsAPI.getAll();
+        if (mounted && reportsData) {
+          const normalized = Array.isArray(reportsData) ? reportsData.map(normalizeReport) : [];
+          // Filter to only show current user's reports
+          const userReports = normalized.filter(r => String(r.studentId) === String(user.id));
+          setReportsList(userReports);
+        }
       } catch (err) {
-        // ignore - will show empty list
+        console.error('Error loading data:', err);
       }
     };
-    load();
+    loadData();
     return () => { mounted = false; };
-  }, []);
+  }, [user.id]);
 
   const userTopics = topicsList.filter(t => {
     const topicStudentId = typeof t.studentId === 'object' && t.studentId ? (t.studentId as any)?._id : t.studentId;
@@ -104,18 +136,28 @@ export default function StudentDashboard({
     setError('');
     try {
       const created = await topicsAPI.create({ title: topicForm.title, description: topicForm.description });
-      // Refresh topic list
-      try {
-        const data = await topicsAPI.getMine();
-        setTopicsList(data || []);
-      } catch (e) {
-        // ignore
-      }
+      const normalized = normalizeTopic(created);
+      
+      // Add to local list immediately
+      setTopicsList(prev => [...prev, normalized]);
+      
+      // Clear form
       setTopicForm({ title: '', description: '' });
-      // call callback if parent wants to know
-      onSubmitTopic && onSubmitTopic(topicForm);
+      
+      // Close dialog
+      setIsDialogOpen(false);
+      
+      // Show success message
+      alert('Topic submitted successfully! Waiting for teacher approval.');
+      
+      // Call parent callback if provided
+      if (onSubmitTopic) {
+        onSubmitTopic(topicForm);
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Failed to submit topic');
+      const errorMsg = err.response?.data?.message || 'Failed to submit topic';
+      setError(errorMsg);
+      alert(`Error: ${errorMsg}`);
     } finally {
       setIsSubmittingTopic(false);
     }
@@ -127,11 +169,23 @@ export default function StudentDashboard({
       return;
     }
 
+    // Validate topicId is selected
+    if (reportForm.topicId === '') {
+      setError('Please select an approved topic');
+      return;
+    }
+
     // Validate file type
     const fileExtension = reportForm.file.name.split('.').pop()?.toLowerCase();
     const allowedExtensions = ['pdf', 'doc', 'docx'];
     if (!fileExtension || !allowedExtensions.includes(fileExtension)) {
       setError('Invalid file type. Please upload PDF, DOC, or DOCX files only.');
+      return;
+    }
+
+    // Validate file name
+    if (reportForm.file.name.length > 255) {
+      setError('File name is too long. Please rename the file to be shorter.');
       return;
     }
 
@@ -146,34 +200,168 @@ export default function StudentDashboard({
     setError('');
     
     try {
+      // Validate that topicId exists in approved topics
+      const selectedTopic = approvedTopics.find(t => t.id === reportForm.topicId);
+      if (!selectedTopic) {
+        setError('Selected topic is not valid. Please select a valid approved topic.');
+        return;
+      }
+
+      // Find the original MongoDB ObjectId from raw data
+      const rawTopic = rawTopicsData.find(t => (t._id || t.id) === reportForm.topicId);
+      const mongoTopicId = rawTopic?._id || reportForm.topicId;
+      
+      console.log('🔍 Topic ID mapping:', {
+        selectedTopicId: reportForm.topicId,
+        rawTopicId: rawTopic?._id,
+        finalTopicId: mongoTopicId
+      });
+
       console.log('📤 Uploading report:', { 
         title: reportForm.title, 
-        topicId: reportForm.topicId, 
+        originalTopicId: reportForm.topicId, 
+        finalTopicId: mongoTopicId,
         fileName: reportForm.file.name,
-        fileSize: reportForm.file.size 
+        fileSize: reportForm.file.size,
+        fileType: reportForm.file.type,
+        topicIdLength: mongoTopicId.length,
+        topicIdType: typeof mongoTopicId,
+        selectedTopic: selectedTopic
       });
+
+      // Test backend connectivity first
+      console.log('🔗 Testing backend connectivity...');
+      try {
+        const healthResponse = await fetch('http://localhost:5000/health');
+        console.log('✅ Backend health check:', healthResponse.status);
+      } catch (healthErr) {
+        console.error('❌ Backend not reachable:', healthErr);
+        throw new Error('Backend server is not reachable. Please ensure it is running on http://localhost:5000');
+      }
+
+      // Check authentication
+      const authToken = localStorage.getItem('authToken');
+      console.log('🔐 Auth token present:', !!authToken);
+      console.log('🔐 Auth token length:', authToken?.length || 0);
+      if (!authToken) {
+        throw new Error('No authentication token found. Please log in again.');
+      }
+
+      // Test reports API endpoint
+      console.log('🧪 Testing reports API endpoint...');
+      try {
+        const testResponse = await fetch('http://localhost:5000/api/reports', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        console.log('✅ Reports API test:', testResponse.status);
+        if (!testResponse.ok) {
+          console.error('❌ Reports API error:', await testResponse.text());
+        }
+      } catch (apiErr) {
+        console.error('❌ Reports API not reachable:', apiErr);
+      }
       
+      // Final validation before upload
+      if (!reportForm.file) {
+        throw new Error('No file selected. Please select a file to upload.');
+      }
+
+      if (!(reportForm.file instanceof File)) {
+        throw new Error('Invalid file object. Please select a file again.');
+      }
+
+      console.log('📁 File details before upload:', {
+        file: reportForm.file,
+        name: reportForm.file.name,
+        size: reportForm.file.size,
+        type: reportForm.file.type,
+        lastModified: reportForm.file.lastModified,
+        isFile: reportForm.file instanceof File,
+        constructor: reportForm.file.constructor.name
+      });
+
+      // Additional file validation
+      if (reportForm.file.size === 0) {
+        throw new Error('Selected file is empty. Please select a valid file.');
+      }
+
+      if (reportForm.file.size > 10 * 1024 * 1024) {
+        throw new Error('File size exceeds 10MB limit.');
+      }
+
       const newReport = await reportsAPI.create({
         title: reportForm.title,
-        topicId: reportForm.topicId,
+        topicId: mongoTopicId,
         file: reportForm.file
       });
       
       console.log('✅ Report uploaded successfully:', newReport);
       
-      onSubmitReport({
-        title: reportForm.title,
-        topicId: reportForm.topicId,
-        fileName: reportForm.file.name,
-        fileSize: (reportForm.file.size / 1024 / 1024).toFixed(2) + ' MB',
-        feedback: undefined,
-        grade: undefined
-      });
+      // Normalize and add to local list
+      const normalizedReport = normalizeReport(newReport);
+      setReportsList(prev => [...prev, normalizedReport]);
       
+      // Clear form and file input
       setReportForm({ title: '', topicId: '', file: null });
+      
+      // Clear the file input element
+      const fileInput = document.getElementById('fileInput') as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = '';
+      }
+      
+      // Close dialog
+      setIsReportDialogOpen(false);
+      
+      // Show success message
+      alert('Report uploaded successfully! Your teacher will review it soon.');
+      
+      // Call parent callback if provided
+      if (onSubmitReport) {
+        onSubmitReport({
+          title: reportForm.title,
+          topicId: reportForm.topicId,
+          fileName: reportForm.file.name,
+          fileSize: (reportForm.file.size / 1024 / 1024).toFixed(2) + ' MB',
+          feedback: undefined,
+          grade: undefined
+        });
+      }
     } catch (err: any) {
       console.error('❌ Error uploading report:', err);
-      setError(err.response?.data?.message || err.message || 'Failed to upload report');
+      console.error('❌ Error type:', typeof err);
+      console.error('❌ Error name:', err.name);
+      console.error('❌ Error message:', err.message);
+      console.error('❌ Error response:', err.response);
+      console.error('❌ Error request:', err.request);
+      console.error('❌ Error config:', err.config);
+      
+      let errorMessage = 'Failed to upload report';
+      
+      if (err.response) {
+        // Server responded with error status
+        errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
+        console.error('❌ Backend error message:', errorMessage);
+      } else if (err.request) {
+        // Network error - request was made but no response received
+        console.error('❌ Network error - no response received');
+        errorMessage = 'Network error. Please check your connection and backend server.';
+      } else if (err.code === 'ERR_NETWORK') {
+        // Network connection error
+        console.error('❌ Network connection error');
+        errorMessage = 'Cannot connect to server. Please check if the backend is running on http://localhost:5000';
+      } else {
+        // Other error
+        console.error('❌ Other error type');
+        errorMessage = err.message || 'An unexpected error occurred';
+      }
+      
+      setError(errorMessage);
+      alert(`Error: ${errorMessage}`);
     } finally {
       setIsSubmittingReport(false);
     }
@@ -273,7 +461,7 @@ export default function StudentDashboard({
                 <div className="space-y-4">
                   {userTopics.slice(0, 3).map((topic, index) => (
                     <motion.div
-                      key={topic.id}
+                      key={`recent-topic-${topic.id}-${index}`}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
@@ -304,7 +492,7 @@ export default function StudentDashboard({
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">Seminar Topics</h2>
-                <Dialog>
+                <Dialog open={isDialogOpen} onOpenChange={(open: boolean) => open ? handleDialogOpen('topic') : setIsDialogOpen(false)}>
                   <DialogTrigger asChild>
                     <Button className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
                       <Plus className="h-4 w-4 mr-2" />
@@ -314,6 +502,9 @@ export default function StudentDashboard({
                   <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                       <DialogTitle>Submit Seminar Topic</DialogTitle>
+                      <DialogDescription>
+                        Fill in the form to submit a new seminar topic for approval
+                      </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       {error && (
@@ -363,10 +554,19 @@ export default function StudentDashboard({
                 </Dialog>
               </div>
 
-              <div className="grid gap-4">
-                {userTopics.map((topic, index) => (
+              {userTopics.length === 0 ? (
+                <Card className="p-12 bg-white shadow-lg border-0 text-center">
+                  <BookOpen className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No Topics Yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    You haven't submitted any seminar topics yet. Click the button above to submit your first topic!
+                  </p>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {userTopics.map((topic, index) => (
                   <motion.div
-                    key={topic.id}
+                    key={`topic-${topic.id}-${index}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
@@ -397,8 +597,9 @@ export default function StudentDashboard({
                       </div>
                     </Card>
                   </motion.div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           </TabsContent>
 
@@ -410,7 +611,7 @@ export default function StudentDashboard({
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold">Seminar Reports</h2>
-                <Dialog>
+                <Dialog open={isReportDialogOpen} onOpenChange={(open: boolean) => open ? handleDialogOpen('report') : setIsReportDialogOpen(false)}>
                   <DialogTrigger asChild>
                     <Button 
                       className="bg-gradient-to-r from-green-500 to-teal-600 text-white"
@@ -423,6 +624,9 @@ export default function StudentDashboard({
                   <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                       <DialogTitle>Upload Seminar Report</DialogTitle>
+                      <DialogDescription>
+                        Upload your seminar report for an approved topic
+                      </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
                       {error && (
@@ -444,18 +648,28 @@ export default function StudentDashboard({
                         />
                       </div>
                       <div>
-                        <Label htmlFor="topicSelect">Select Topic</Label>
-                        <select
-                          id="topicSelect"
-                          value={reportForm.topicId}
-                          onChange={(e) => setReportForm(prev => ({ ...prev, topicId: e.target.value }))}
-                          className="w-full p-2 border border-gray-300 rounded-lg bg-white"
-                        >
-                          <option value="">Select an approved topic</option>
-                          {approvedTopics.map(topic => (
-                            <option key={topic.id} value={topic.id}>{topic.title}</option>
-                          ))}
-                        </select>
+                        <Label htmlFor="topicSelect">Select Topic *</Label>
+                        {approvedTopics.length === 0 ? (
+                          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
+                            No approved topics available. Please submit and get a topic approved first.
+                          </div>
+                        ) : (
+                          <Select 
+                            value={reportForm.topicId} 
+                            onValueChange={(value: string) => setReportForm(prev => ({ ...prev, topicId: value }))}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select an approved topic" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {approvedTopics.map((topic, index) => (
+                                <SelectItem key={`approved-topic-${topic.id}-${index}`} value={topic.id}>
+                                  {topic.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                       <div>
                         <Label htmlFor="fileInput">Upload File (PDF, DOC, DOCX)</Label>
@@ -463,7 +677,45 @@ export default function StudentDashboard({
                           id="fileInput"
                           type="file"
                           accept=".pdf,.doc,.docx"
-                          onChange={(e) => setReportForm(prev => ({ ...prev, file: e.target.files?.[0] || null }))}
+                          onChange={(e) => {
+                            console.log('📁 File input changed:', e.target.files);
+                            const file = e.target.files?.[0] || null;
+                            
+                            if (file) {
+                              console.log('📁 Selected file:', {
+                                name: file.name,
+                                size: file.size,
+                                type: file.type,
+                                lastModified: file.lastModified,
+                                isFile: file instanceof File
+                              });
+                              
+                              // Validate file type
+                              const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                              const fileExtension = file.name.split('.').pop()?.toLowerCase();
+                              const allowedExtensions = ['pdf', 'doc', 'docx'];
+                              
+                              if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension || '')) {
+                                setError('Invalid file type. Please upload PDF, DOC, or DOCX files only.');
+                                e.target.value = '';
+                                return;
+                              }
+                              
+                              // Validate file size (10MB max)
+                              if (file.size > 10 * 1024 * 1024) {
+                                setError('File size too large. Maximum size is 10MB.');
+                                e.target.value = '';
+                                return;
+                              }
+                              
+                              setError(''); // Clear any previous errors
+                            } else {
+                              console.log('📁 No file selected');
+                            }
+                            
+                            setReportForm(prev => ({ ...prev, file }));
+                            console.log('📁 Updated reportForm.file:', file);
+                          }}
                           className="w-full"
                         />
                         {reportForm.file && (
@@ -491,10 +743,21 @@ export default function StudentDashboard({
                 </Dialog>
               </div>
 
-              <div className="grid gap-4">
-                {userReports.map((report, index) => (
+              {userReports.length === 0 ? (
+                <Card className="p-12 bg-white shadow-lg border-0 text-center">
+                  <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">No Reports Yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    {approvedTopics.length === 0 
+                      ? "You need to have an approved topic before you can upload a report."
+                      : "You haven't uploaded any reports yet. Click the button above to upload your first report!"}
+                  </p>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {userReports.map((report, index) => (
                   <motion.div
-                    key={report.id}
+                    key={`report-${report.id}-${index}`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1 }}
@@ -553,8 +816,9 @@ export default function StudentDashboard({
                       </div>
                     </Card>
                   </motion.div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </motion.div>
           </TabsContent>
 
@@ -565,27 +829,89 @@ export default function StudentDashboard({
               className="space-y-6"
             >
               <Card className="p-6 bg-white shadow-lg border-0">
-                <h3 className="text-lg font-semibold mb-4">Profile Information</h3>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Full Name</Label>
-                    <p className="text-lg">{user.name}</p>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold">Profile Information</h3>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="text-sm text-green-600 font-medium">Student Account</span>
                   </div>
-                  <div>
-                    <Label>Email</Label>
-                    <p className="text-lg">{user.email}</p>
+                </div>
+                
+                {/* Personal Information */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <GraduationCap className="h-4 w-4 mr-2" />
+                    Personal Information
+                  </h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Full Name</Label>
+                      <p className="text-lg font-medium">{user.name || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Email Address</Label>
+                      <p className="text-lg font-medium">{user.email || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">User Role</Label>
+                      <p className="text-lg font-medium capitalize">{user.role || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Account ID</Label>
+                      <p className="text-sm font-mono text-gray-500">{user.id || 'Not available'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Roll Number</Label>
-                    <p className="text-lg">{user.rollNumber}</p>
+                </div>
+
+                {/* Academic Information */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Academic Information
+                  </h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <Label className="text-sm text-blue-600">Roll Number</Label>
+                      <p className="text-lg font-medium">{user.rollNumber || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <Label className="text-sm text-blue-600">Department</Label>
+                      <p className="text-lg font-medium">{user.department || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <Label className="text-sm text-blue-600">Academic Year</Label>
+                      <p className="text-lg font-medium">{user.year ? `${user.year} Year` : 'Not provided'}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <Label className="text-sm text-blue-600">Specialization</Label>
+                      <p className="text-lg font-medium">{user.specialization || 'General'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Department</Label>
-                    <p className="text-lg">{user.department}</p>
-                  </div>
-                  <div>
-                    <Label>Year</Label>
-                    <p className="text-lg">{user.year} Year</p>
+                </div>
+
+                {/* Account Statistics */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    Account Statistics
+                  </h4>
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <div className="bg-green-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-green-600">{userTopics.length}</p>
+                      <Label className="text-sm text-green-600">Topics Submitted</Label>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-blue-600">{approvedTopics.length}</p>
+                      <Label className="text-sm text-blue-600">Topics Approved</Label>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-purple-600">{userReports.length}</p>
+                      <Label className="text-sm text-purple-600">Reports Uploaded</Label>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-orange-600">{completedReports.length}</p>
+                      <Label className="text-sm text-orange-600">Reports Reviewed</Label>
+                    </div>
                   </div>
                 </div>
               </Card>

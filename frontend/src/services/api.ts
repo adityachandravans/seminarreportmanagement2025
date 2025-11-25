@@ -1,9 +1,12 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 // Get API URL from environment variable or use default
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = ((import.meta as any).env?.VITE_API_URL as string) || 'http://localhost:5000/api';
 
-console.log('🔗 API Base URL:', API_BASE_URL);
+// Only log in development
+if ((import.meta as any).env?.DEV) {
+  console.log('🔗 API Base URL:', API_BASE_URL);
+}
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -61,13 +64,23 @@ export const authAPI = {
     return response.data;
   },
 
-  login: async (email: string, password: string) => {
-    const response = await apiClient.post('/auth/login', { email, password });
+  login: async (email: string, password: string, role?: string) => {
+    const response = await apiClient.post('/auth/login', { email, password, role });
     return response.data;
   },
 
   getCurrentUser: async () => {
     const response = await apiClient.get('/auth/me');
+    return response.data;
+  },
+
+  verifyOTP: async (userId: string, otp: string) => {
+    const response = await apiClient.post('/auth/verify-otp', { userId, otp });
+    return response.data;
+  },
+
+  resendOTP: async (userId: string) => {
+    const response = await apiClient.post('/auth/resend-otp', { userId });
     return response.data;
   },
 };
@@ -107,26 +120,63 @@ export const reportsAPI = {
   },
 
   create: async (data: { title: string; topicId: string; file: File }) => {
+    console.log('📦 Creating FormData with:', {
+      title: data.title,
+      topicId: data.topicId,
+      file: data.file,
+      fileName: data.file?.name,
+      fileSize: data.file?.size,
+      fileType: data.file?.type,
+      fileIsValid: data.file instanceof File
+    });
+
+    // Validate file exists and is valid
+    if (!data.file || !(data.file instanceof File)) {
+      throw new Error('Invalid file object provided');
+    }
+
     const formData = new FormData();
     formData.append('title', data.title);
     formData.append('topicId', data.topicId);
-    formData.append('file', data.file);
+    formData.append('file', data.file, data.file.name);
     
-    // Do NOT set the Content-Type header manually when sending FormData with axios.
-    // Let axios/browser set the correct multipart boundary for you.
-    // Create a new request config without Content-Type header
-    const config = {
-      timeout: 60000, // 60 seconds timeout for file upload
-      headers: {
-        ...apiClient.defaults.headers.common,
-        // Remove Content-Type to let browser set it with boundary
-      },
-    };
-    // Remove Content-Type if it exists
-    delete (config.headers as any)['Content-Type'];
+    // Log FormData contents
+    console.log('📦 FormData entries:');
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`  ${key}: File { name: "${value.name}", size: ${value.size}, type: "${value.type}" }`);
+      } else {
+        console.log(`  ${key}:`, value);
+      }
+    }
     
-    const response = await apiClient.post('/reports', formData, config);
-    return response.data;
+    // Test if FormData is properly constructed
+    console.log('📦 FormData has file:', formData.has('file'));
+    console.log('📦 FormData get file:', formData.get('file'));
+    
+    // Use a completely clean axios instance for file upload
+    const authToken = localStorage.getItem('authToken');
+    
+    try {
+      console.log('📤 Sending FormData to /reports');
+      console.log('📤 Auth token exists:', !!authToken);
+      
+      // Make the request with minimal configuration
+      const response = await axios.post(`${API_BASE_URL}/reports`, formData, {
+        timeout: 60000,
+        headers: {
+          'Authorization': authToken ? `Bearer ${authToken}` : '',
+        },
+      });
+      
+      console.log('✅ Upload response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Upload failed:', error);
+      console.error('❌ Error response:', error.response?.data);
+      console.error('❌ Error status:', error.response?.status);
+      throw error;
+    }
   },
 
   update: async (id: string, data: any) => {

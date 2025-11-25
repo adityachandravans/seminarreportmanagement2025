@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UserRole, User, SeminarReport, Topic } from './types';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
+import OTPVerification from './components/OTPVerification';
 import StudentDashboard from './components/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import { authAPI, topicsAPI, reportsAPI, usersAPI } from './services/api';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<'landing' | 'auth' | 'dashboard'>('landing');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'auth' | 'otp' | 'dashboard'>('landing');
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthMode, setIsAuthMode] = useState<'login' | 'register'>('login');
@@ -17,6 +18,7 @@ export default function App() {
   const [reports, setReports] = useState<SeminarReport[]>([]);
   const [students, setStudents] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [pendingVerification, setPendingVerification] = useState<{ userId: string; email: string } | null>(null);
 
   // Helper function to normalize MongoDB _id to id
   const normalizeTopic = (topic: any): Topic => {
@@ -132,6 +134,19 @@ export default function App() {
 
   const handleLogin = async (email: string, password: string) => {
     try {
+      // Check if login requires verification
+      const loginData = localStorage.getItem('loginData');
+      if (loginData) {
+        const data = JSON.parse(loginData);
+        if (data.requiresVerification) {
+          // Show OTP verification page
+          setPendingVerification({ userId: data.userId, email: data.email });
+          setCurrentPage('otp');
+          localStorage.removeItem('loginData');
+          return true;
+        }
+      }
+
       // User is already authenticated by AuthPage component
       // Just navigate to dashboard
       const userStr = localStorage.getItem('user');
@@ -151,6 +166,19 @@ export default function App() {
 
   const handleRegister = async (userData: Partial<User>) => {
     try {
+      // Check if registration requires verification
+      const registrationData = localStorage.getItem('registrationData');
+      if (registrationData) {
+        const data = JSON.parse(registrationData);
+        if (data.requiresVerification) {
+          // Show OTP verification page
+          setPendingVerification({ userId: data.userId, email: data.email });
+          setCurrentPage('otp');
+          localStorage.removeItem('registrationData');
+          return true;
+        }
+      }
+
       // User is already authenticated by AuthPage component
       // Just navigate to dashboard
       const userStr = localStorage.getItem('user');
@@ -166,6 +194,16 @@ export default function App() {
       console.error('Error in handleRegister:', error);
       return false;
     }
+  };
+
+  const handleOTPVerified = async (token: string, user: any) => {
+    // Store token and user
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    setCurrentUser(user);
+    setCurrentPage('dashboard');
+    setPendingVerification(null);
+    await loadData();
   };
 
   const handleLogout = () => {
@@ -235,7 +273,9 @@ export default function App() {
                   }
                 }
                 
-                console.log('📝 Updating topic:', { topicId, normalizedTopicId, updates });
+                if (import.meta.env.DEV) {
+                  console.log('📝 Updating topic:', { topicId, normalizedTopicId, updates });
+                }
                 
                 // Update local state immediately for better UX
                 const currentTopic = topics.find(t => t.id === topicId || t.id === normalizedTopicId);
@@ -299,7 +339,9 @@ export default function App() {
             onLogout={handleLogout}
             onUpdateUser={async (userId, updates) => {
               try {
-                console.log('📝 Admin updating user:', userId, updates);
+                if (import.meta.env.DEV) {
+                  console.log('📝 Admin updating user:', userId, updates);
+                }
                 const updatedUser = await usersAPI.update(userId, updates);
                 
                 // Update local student list
@@ -318,7 +360,9 @@ export default function App() {
                 if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
                   return;
                 }
-                console.log('🗑️ Admin deleting user:', userId);
+                if (import.meta.env.DEV) {
+                  console.log('🗑️ Admin deleting user:', userId);
+                }
                 await usersAPI.delete(userId);
                 
                 // Remove from local state
@@ -380,6 +424,26 @@ export default function App() {
               onRegister={handleRegister}
               onModeChange={setIsAuthMode}
               onBack={() => setCurrentPage('landing')}
+            />
+          </motion.div>
+        )}
+
+        {currentPage === 'otp' && pendingVerification && (
+          <motion.div
+            key="otp"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+          >
+            <OTPVerification
+              userId={pendingVerification.userId}
+              email={pendingVerification.email}
+              onVerified={handleOTPVerified}
+              onBack={() => {
+                setCurrentPage('auth');
+                setPendingVerification(null);
+              }}
             />
           </motion.div>
         )}

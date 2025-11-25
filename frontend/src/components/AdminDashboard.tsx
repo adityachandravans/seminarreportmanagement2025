@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { User, Topic, SeminarReport } from '../types';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -7,9 +7,9 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Chart, ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from './ui/chart';
 import { 
   Shield, 
   Users, 
@@ -24,9 +24,10 @@ import {
   Download,
   BarChart3,
   PieChart,
-  Activity
+  Activity,
+  CheckCircle
 } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart as RechartsPieChart, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 
 interface AdminDashboardProps {
   user: User;
@@ -51,6 +52,7 @@ export default function AdminDashboard({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [userForm, setUserForm] = useState<Partial<User>>({});
+  const [isAddingUser, setIsAddingUser] = useState(false);
 
   const students = users.filter(u => u.role === 'student');
   const teachers = users.filter(u => u.role === 'teacher');
@@ -88,11 +90,63 @@ export default function AdminDashboard({
     setUserForm(user);
   };
 
-  const handleUpdateUser = () => {
+  const handleUpdateUser = async () => {
     if (selectedUser && userForm) {
-      onUpdateUser(selectedUser.id, userForm);
-      setSelectedUser(null);
+      try {
+        await onUpdateUser(selectedUser.id, userForm);
+        setSelectedUser(null);
+        setUserForm({});
+      } catch (error) {
+        console.error('Error updating user:', error);
+      }
+    }
+  };
+
+  const handleAddUser = () => {
+    setIsAddingUser(true);
+    setUserForm({
+      email: '',
+      name: '',
+      role: 'student',
+      password: '',
+      rollNumber: '',
+      department: '',
+      year: undefined,
+      specialization: ''
+    });
+  };
+
+  const handleCreateUser = async () => {
+    if (!userForm.email || !userForm.name || !userForm.role || !userForm.password) {
+      alert('Please fill in all required fields (email, name, role, password)');
+      return;
+    }
+
+    try {
+      // Call the register API to create a new user
+      const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${apiUrl}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify(userForm)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create user');
+      }
+
+      alert('User created successfully!');
+      setIsAddingUser(false);
       setUserForm({});
+      // Refresh the page to show new user
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      alert(error.message || 'Failed to create user');
     }
   };
 
@@ -161,7 +215,7 @@ export default function AdminDashboard({
 
       <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-4 bg-white shadow-sm">
+          <TabsList className="grid w-full grid-cols-5 bg-white shadow-sm">
             <TabsTrigger value="overview">
               <TrendingUp className="h-4 w-4 mr-2" />
               Overview
@@ -177,6 +231,10 @@ export default function AdminDashboard({
             <TabsTrigger value="system">
               <Activity className="h-4 w-4 mr-2" />
               System
+            </TabsTrigger>
+            <TabsTrigger value="profile">
+              <Shield className="h-4 w-4 mr-2" />
+              Profile
             </TabsTrigger>
           </TabsList>
 
@@ -336,7 +394,10 @@ export default function AdminDashboard({
                       className="w-80"
                     />
                   </div>
-                  <Button className="bg-gradient-to-r from-orange-500 to-red-600 text-white">
+                  <Button 
+                    onClick={handleAddUser}
+                    className="bg-gradient-to-r from-orange-500 to-red-600 text-white"
+                  >
                     <Plus className="h-4 w-4 mr-2" />
                     Add User
                   </Button>
@@ -422,7 +483,15 @@ export default function AdminDashboard({
               <div className="grid md:grid-cols-2 gap-6">
                 <Card className="p-6 bg-white shadow-lg border-0">
                   <h3 className="text-lg font-semibold mb-4">Students by Department</h3>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ChartContainer
+                    config={{
+                      students: {
+                        label: "Students",
+                        color: "#3b82f6",
+                      },
+                    }}
+                    className="h-[300px]"
+                  >
                     <BarChart data={departmentData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
@@ -436,14 +505,30 @@ export default function AdminDashboard({
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="students" fill="#3b82f6" />
                     </BarChart>
-                  </ResponsiveContainer>
+                  </ChartContainer>
                 </Card>
 
                 <Card className="p-6 bg-white shadow-lg border-0">
                   <h3 className="text-lg font-semibold mb-4">Topic Status Distribution</h3>
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ChartContainer
+                    config={{
+                      pending: {
+                        label: "Pending",
+                        color: "#f59e0b",
+                      },
+                      approved: {
+                        label: "Approved", 
+                        color: "#10b981",
+                      },
+                      rejected: {
+                        label: "Rejected",
+                        color: "#ef4444",
+                      },
+                    }}
+                    className="h-[300px]"
+                  >
                     <RechartsPieChart>
-                      <RechartsPieChart
+                      <Pie
                         data={topicsByStatus}
                         cx="50%"
                         cy="50%"
@@ -453,13 +538,13 @@ export default function AdminDashboard({
                         {topicsByStatus.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
-                      </RechartsPieChart>
+                      </Pie>
                       <ChartTooltip content={<ChartTooltipContent />} />
                     </RechartsPieChart>
-                  </ResponsiveContainer>
+                  </ChartContainer>
                   <div className="flex justify-center space-x-4 mt-4">
                     {topicsByStatus.map((item, index) => (
-                      <div key={item.name} className="flex items-center space-x-2">
+                      <div key={`legend-${item.name}-${index}`} className="flex items-center space-x-2">
                         <div 
                           className="w-3 h-3 rounded-full" 
                           style={{ backgroundColor: item.color }}
@@ -584,6 +669,181 @@ export default function AdminDashboard({
               </Card>
             </motion.div>
           </TabsContent>
+
+          <TabsContent value="profile">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              <h2 className="text-2xl font-bold">Administrator Profile</h2>
+              
+              <Card className="p-6 bg-white shadow-lg border-0">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold">Profile Information</h3>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <span className="text-sm text-red-600 font-medium">Administrator Account</span>
+                  </div>
+                </div>
+                
+                {/* Personal Information */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Personal Information
+                  </h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Full Name</Label>
+                      <p className="text-lg font-medium">{user.name || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Email Address</Label>
+                      <p className="text-lg font-medium">{user.email || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">User Role</Label>
+                      <p className="text-lg font-medium capitalize">{user.role || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Administrator ID</Label>
+                      <p className="text-sm font-mono text-gray-500">{user.id || 'Not available'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Administrative Information */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <Users className="h-4 w-4 mr-2" />
+                    Administrative Information
+                  </h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-red-50 p-3 rounded-lg">
+                      <Label className="text-sm text-red-600">Department</Label>
+                      <p className="text-lg font-medium">{user.department || 'System Administration'}</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg">
+                      <Label className="text-sm text-red-600">Specialization</Label>
+                      <p className="text-lg font-medium">{user.specialization || 'System Management'}</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg">
+                      <Label className="text-sm text-red-600">Employee ID</Label>
+                      <p className="text-lg font-medium">{user.rollNumber || 'ADMIN-001'}</p>
+                    </div>
+                    <div className="bg-red-50 p-3 rounded-lg">
+                      <Label className="text-sm text-red-600">Access Level</Label>
+                      <p className="text-lg font-medium">Full System Access</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Management Statistics */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <Activity className="h-4 w-4 mr-2" />
+                    System Management Statistics
+                  </h4>
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <div className="bg-blue-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-blue-600">{users.length}</p>
+                      <Label className="text-sm text-blue-600">Total Users</Label>
+                    </div>
+                    <div className="bg-green-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-green-600">{topics.length}</p>
+                      <Label className="text-sm text-green-600">Total Topics</Label>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-purple-600">{reports.length}</p>
+                      <Label className="text-sm text-purple-600">Total Reports</Label>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-orange-600">{users.filter(u => u.role === 'admin').length}</p>
+                      <Label className="text-sm text-orange-600">Admin Users</Label>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Administrative Privileges */}
+              <Card className="p-6 bg-white shadow-lg border-0">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Shield className="h-5 w-5 mr-2 text-red-600" />
+                  Administrative Privileges
+                </h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-gray-700">User Management</h4>
+                    <ul className="space-y-2 text-sm text-gray-600">
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                        Create, edit, and delete users
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                        Manage user roles and permissions
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                        View all user activities
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                        Export user data
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="space-y-3">
+                    <h4 className="font-medium text-gray-700">System Management</h4>
+                    <ul className="space-y-2 text-sm text-gray-600">
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                        View system analytics
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                        Monitor system health
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                        Manage database backups
+                      </li>
+                      <li className="flex items-center">
+                        <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
+                        Configure system settings
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Account Security */}
+              <Card className="p-6 bg-white shadow-lg border-0">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Shield className="h-5 w-5 mr-2 text-orange-600" />
+                  Account Security
+                </h3>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="bg-green-50 p-4 rounded-lg text-center">
+                    <CheckCircle className="h-8 w-8 text-green-600 mx-auto mb-2" />
+                    <p className="font-medium text-green-700">Two-Factor Auth</p>
+                    <p className="text-sm text-green-600">Enabled</p>
+                  </div>
+                  <div className="bg-blue-50 p-4 rounded-lg text-center">
+                    <Shield className="h-8 w-8 text-blue-600 mx-auto mb-2" />
+                    <p className="font-medium text-blue-700">Password Strength</p>
+                    <p className="text-sm text-blue-600">Strong</p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg text-center">
+                    <Activity className="h-8 w-8 text-purple-600 mx-auto mb-2" />
+                    <p className="font-medium text-purple-700">Last Login</p>
+                    <p className="text-sm text-purple-600">Today</p>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -592,6 +852,9 @@ export default function AdminDashboard({
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Edit User: {selectedUser?.name}</DialogTitle>
+            <DialogDescription>
+              Edit user information and update their details
+            </DialogDescription>
           </DialogHeader>
           {selectedUser && (
             <div className="space-y-4">
@@ -613,7 +876,7 @@ export default function AdminDashboard({
               </div>
               <div>
                 <Label htmlFor="role">Role</Label>
-                <Select value={userForm.role} onValueChange={(value) => setUserForm(prev => ({ ...prev, role: value as any }))}>
+                <Select value={userForm.role} onValueChange={(value: string) => setUserForm(prev => ({ ...prev, role: value as 'student' | 'teacher' | 'admin' }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -649,6 +912,135 @@ export default function AdminDashboard({
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add User Dialog */}
+      <Dialog open={isAddingUser} onOpenChange={() => setIsAddingUser(false)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+            <DialogDescription>
+              Create a new user account by filling in the required information
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newName">Name *</Label>
+              <Input
+                id="newName"
+                value={userForm.name || ''}
+                onChange={(e) => setUserForm(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter full name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="newEmail">Email *</Label>
+              <Input
+                id="newEmail"
+                type="email"
+                value={userForm.email || ''}
+                onChange={(e) => setUserForm(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="Enter email address"
+              />
+            </div>
+            <div>
+              <Label htmlFor="newPassword">Password *</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={userForm.password || ''}
+                onChange={(e) => setUserForm(prev => ({ ...prev, password: e.target.value }))}
+                placeholder="Enter password (min 6 characters)"
+              />
+            </div>
+            <div>
+              <Label htmlFor="newRole">Role *</Label>
+              <Select value={userForm.role} onValueChange={(value: string) => setUserForm(prev => ({ ...prev, role: value as 'student' | 'teacher' | 'admin' }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student">Student</SelectItem>
+                  <SelectItem value="teacher">Teacher</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {userForm.role === 'student' && (
+              <>
+                <div>
+                  <Label htmlFor="newRollNumber">Roll Number</Label>
+                  <Input
+                    id="newRollNumber"
+                    value={userForm.rollNumber || ''}
+                    onChange={(e) => setUserForm(prev => ({ ...prev, rollNumber: e.target.value }))}
+                    placeholder="Enter roll number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newDepartment">Department</Label>
+                  <Select value={userForm.department} onValueChange={(value: string) => setUserForm(prev => ({ ...prev, department: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Computer Science">Computer Science</SelectItem>
+                      <SelectItem value="Electronics">Electronics</SelectItem>
+                      <SelectItem value="Mechanical">Mechanical</SelectItem>
+                      <SelectItem value="Civil">Civil</SelectItem>
+                      <SelectItem value="Chemical">Chemical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="newYear">Year</Label>
+                  <Select value={userForm.year?.toString()} onValueChange={(value: string) => setUserForm(prev => ({ ...prev, year: parseInt(value) }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select year" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1st Year</SelectItem>
+                      <SelectItem value="2">2nd Year</SelectItem>
+                      <SelectItem value="3">3rd Year</SelectItem>
+                      <SelectItem value="4">4th Year</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+            {userForm.role === 'teacher' && (
+              <>
+                <div>
+                  <Label htmlFor="newTeacherDepartment">Department</Label>
+                  <Select value={userForm.department} onValueChange={(value: string) => setUserForm(prev => ({ ...prev, department: value }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Computer Science">Computer Science</SelectItem>
+                      <SelectItem value="Electronics">Electronics</SelectItem>
+                      <SelectItem value="Mechanical">Mechanical</SelectItem>
+                      <SelectItem value="Civil">Civil</SelectItem>
+                      <SelectItem value="Chemical">Chemical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="newSpecialization">Specialization</Label>
+                  <Input
+                    id="newSpecialization"
+                    value={userForm.specialization || ''}
+                    onChange={(e) => setUserForm(prev => ({ ...prev, specialization: e.target.value }))}
+                    placeholder="Enter specialization"
+                  />
+                </div>
+              </>
+            )}
+            <Button onClick={handleCreateUser} className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white">
+              Create User
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

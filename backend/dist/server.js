@@ -13,14 +13,27 @@ const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
 const topic_routes_1 = __importDefault(require("./routes/topic.routes"));
 const report_routes_1 = __importDefault(require("./routes/report.routes"));
 const user_routes_1 = __importDefault(require("./routes/user.routes"));
-// Load .env file from the backend directory
-// Use process.cwd() to find backend/.env from current working directory
-const envPath = path_1.default.resolve(process.cwd(), 'backend', '.env');
-dotenv_1.default.config({ path: envPath });
-// Fallback if env file not found
-if (!process.env.MONGODB_URI) {
-    console.warn('Warning: MONGODB_URI not set. Trying root-level .env');
-    dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), '.env') });
+// Load environment variables
+// This tries, in order:
+// 1) backend/.env relative to this file
+// 2) .env in the current working directory
+// 3) backend/.env in the current working directory (monorepo root)
+const candidateEnvPaths = [
+    path_1.default.resolve(__dirname, '..', '.env'), // backend/.env when running from backend
+    path_1.default.resolve(process.cwd(), '.env'), // project-root/.env
+    path_1.default.resolve(process.cwd(), 'backend', '.env'), // project-root/backend/.env
+];
+let loadedEnvPath = null;
+for (const p of candidateEnvPaths) {
+    if (fs_1.default.existsSync(p)) {
+        dotenv_1.default.config({ path: p });
+        loadedEnvPath = p;
+        console.log('✓ Loaded environment from', p);
+        break;
+    }
+}
+if (!loadedEnvPath) {
+    console.warn('⚠️  No .env file found in expected locations. Using process.env only.');
 }
 // Validate required environment variables
 if (!process.env.MONGODB_URI) {

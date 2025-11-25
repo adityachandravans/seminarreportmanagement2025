@@ -47,9 +47,20 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
 
     try {
       if (mode === 'login') {
-        console.log('🔐 Attempting login for:', formData.email);
-        const response = await authAPI.login(formData.email, formData.password);
-        console.log('✅ Login successful:', response);
+        if (import.meta.env.DEV) {
+          console.log('🔐 Attempting login for:', formData.email, 'as role:', role);
+        }
+        const response = await authAPI.login(formData.email, formData.password, role);
+        if (import.meta.env.DEV) {
+          console.log('✅ Login successful:', response);
+        }
+        
+        // Verify the returned user role matches the expected role
+        if (response.user.role !== role) {
+          setError(`Access denied. This email is registered as ${response.user.role}, not ${role}.`);
+          return;
+        }
+        
         localStorage.setItem('authToken', response.token);
         localStorage.setItem('user', JSON.stringify(response.user));
         // Call onLogin to navigate to dashboard
@@ -65,14 +76,31 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
           year: formData.year ? parseInt(formData.year) : undefined,
           specialization: formData.specialization || undefined
         };
-        console.log('📝 Attempting registration:', { email: registerData.email, name: registerData.name, role: registerData.role });
-        console.log('📤 Sending registration data:', JSON.stringify(registerData, null, 2));
+        if (import.meta.env.DEV) {
+          console.log('📝 Attempting registration:', { email: registerData.email, name: registerData.name, role: registerData.role });
+          console.log('📤 Sending registration data:', JSON.stringify(registerData, null, 2));
+        }
         const response = await authAPI.register(registerData);
-        console.log('✅ Registration successful:', response);
-        localStorage.setItem('authToken', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
-        // Call onRegister to navigate to dashboard
-        await onRegister(registerData);
+        if (import.meta.env.DEV) {
+          console.log('✅ Registration successful:', response);
+        }
+
+        // Check if email verification is required
+        if (response.requiresVerification) {
+          // Store registration data for OTP verification
+          localStorage.setItem('registrationData', JSON.stringify({
+            userId: response.userId,
+            email: response.email,
+            requiresVerification: true
+          }));
+          // Call onRegister to navigate to OTP page
+          await onRegister(registerData);
+        } else {
+          // Old flow - direct login (backward compatibility)
+          localStorage.setItem('authToken', response.token);
+          localStorage.setItem('user', JSON.stringify(response.user));
+          await onRegister(registerData);
+        }
       }
     } catch (err: any) {
       console.error('❌ Authentication error:', err);
@@ -81,15 +109,37 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
       console.error('❌ Error data:', err.response?.data);
       
       const errorMessage = err.response?.data?.message || err.message || 'An error occurred';
-      setError(errorMessage);
       
+      // Handle role mismatch error (403 Forbidden)
+      if (err.response?.status === 403) {
+        const registeredRole = err.response?.data?.registeredRole;
+        const requiresVerification = err.response?.data?.requiresVerification;
+        
+        if (requiresVerification) {
+          // Email not verified - redirect to OTP page
+          localStorage.setItem('loginData', JSON.stringify({
+            userId: err.response?.data?.userId,
+            email: err.response?.data?.email,
+            requiresVerification: true
+          }));
+          // Call onLogin to navigate to OTP page
+          await onLogin(formData.email, formData.password);
+          return;
+        } else if (registeredRole) {
+          setError(`Access denied. This email is registered as a ${registeredRole}. Please login using the ${registeredRole} option.`);
+        } else {
+          setError(errorMessage);
+        }
+      }
       // Log specific error types
-      if (err.code === 'ERR_NETWORK') {
+      else if (err.code === 'ERR_NETWORK') {
         setError('Network error: Could not connect to server. Please check if the backend is running.');
       } else if (err.response?.status === 503) {
         setError('Database connection unavailable. Please check MongoDB connection.');
       } else if (err.response?.status === 500) {
         setError('Server error: ' + errorMessage);
+      } else {
+        setError(errorMessage);
       }
     } finally {
       setIsLoading(false);

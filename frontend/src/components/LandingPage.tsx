@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { UserRole } from '../types';
 import { Button } from './ui/button';
 import { Card } from './ui/card';

@@ -1,5 +1,16 @@
 {
   "dependencies": {
-    "axios": "^1.13.2"
+    "axios": "^1.13.2",
+    "concurrently": "^8.2.0"
+  },
+  "name": "seminar-report-management",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "build": "npm run build:backend && npm run build:frontend"
   }
 }

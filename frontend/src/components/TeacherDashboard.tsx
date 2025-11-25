@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { User, Topic, SeminarReport } from '../types';
 import { topicsAPI, reportsAPI } from '../services/api';
 import { Button } from './ui/button';
@@ -84,14 +84,18 @@ export default function TeacherDashboard({
 
   const handleTopicReview = async (topicId: string, status: 'approved' | 'rejected', feedback?: string) => {
     try {
-      console.log('📝 Reviewing topic:', { topicId, status, feedback });
+      if (import.meta.env.DEV) {
+        console.log('📝 Reviewing topic:', { topicId, status, feedback });
+      }
       const updatedTopic = await topicsAPI.update(topicId, {
         status,
         feedback: feedback || undefined,
         reviewedAt: new Date().toISOString().split('T')[0],
         teacherId: user.id
       });
-      console.log('✅ Topic reviewed successfully:', updatedTopic);
+      if (import.meta.env.DEV) {
+        console.log('✅ Topic reviewed successfully:', updatedTopic);
+      }
       onUpdateTopic(topicId, updatedTopic);
       setSelectedTopic(null);
       setFeedback('');
@@ -107,14 +111,18 @@ export default function TeacherDashboard({
         alert('Please provide both grade and feedback');
         return;
       }
-      console.log('📝 Reviewing report:', { reportId, feedback, grade });
+      if (import.meta.env.DEV) {
+        console.log('📝 Reviewing report:', { reportId, feedback, grade });
+      }
       const updatedReport = await reportsAPI.update(reportId, {
         status: 'reviewed',
         feedback,
         grade,
         teacherId: user.id
       });
-      console.log('✅ Report reviewed successfully:', updatedReport);
+      if (import.meta.env.DEV) {
+        console.log('✅ Report reviewed successfully:', updatedReport);
+      }
       onUpdateReport(reportId, updatedReport);
       setSelectedReport(null);
       setFeedback('');
@@ -312,7 +320,7 @@ export default function TeacherDashboard({
                   const topicStudentId = typeof topic.studentId === 'object' ? (topic.studentId as any)?._id : topic.studentId;
                   const student = getStudentInfo(topicStudentId || topic.studentId);
                   // Ensure we have a valid topic ID
-                  const topicId = topic.id || topic._id || (topic as any)?._id;
+                  const topicId = topic.id || (topic as any)?._id;
                   return (
                     <motion.div
                       key={topicId}
@@ -555,23 +563,89 @@ export default function TeacherDashboard({
               className="space-y-6"
             >
               <Card className="p-6 bg-white shadow-lg border-0">
-                <h3 className="text-lg font-semibold mb-4">Profile Information</h3>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Full Name</Label>
-                    <p className="text-lg">{user.name}</p>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold">Profile Information</h3>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <span className="text-sm text-blue-600 font-medium">Faculty Account</span>
                   </div>
-                  <div>
-                    <Label>Email</Label>
-                    <p className="text-lg">{user.email}</p>
+                </div>
+                
+                {/* Personal Information */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <Users className="h-4 w-4 mr-2" />
+                    Personal Information
+                  </h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Full Name</Label>
+                      <p className="text-lg font-medium">{user.name || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Email Address</Label>
+                      <p className="text-lg font-medium">{user.email || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">User Role</Label>
+                      <p className="text-lg font-medium capitalize">{user.role || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-gray-50 p-3 rounded-lg">
+                      <Label className="text-sm text-gray-600">Faculty ID</Label>
+                      <p className="text-sm font-mono text-gray-500">{user.id || 'Not available'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Department</Label>
-                    <p className="text-lg">{user.department}</p>
+                </div>
+
+                {/* Professional Information */}
+                <div className="mb-6">
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Professional Information
+                  </h4>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <Label className="text-sm text-blue-600">Department</Label>
+                      <p className="text-lg font-medium">{user.department || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <Label className="text-sm text-blue-600">Specialization</Label>
+                      <p className="text-lg font-medium">{user.specialization || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <Label className="text-sm text-blue-600">Employee ID</Label>
+                      <p className="text-lg font-medium">{user.rollNumber || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg">
+                      <Label className="text-sm text-blue-600">Academic Year</Label>
+                      <p className="text-lg font-medium">{user.year ? `${user.year}` : 'Current'}</p>
+                    </div>
                   </div>
-                  <div>
-                    <Label>Specialization</Label>
-                    <p className="text-lg">{user.specialization}</p>
+                </div>
+
+                {/* Teaching Statistics */}
+                <div>
+                  <h4 className="text-md font-semibold text-gray-700 mb-3 flex items-center">
+                    <TrendingUp className="h-4 w-4 mr-2" />
+                    Teaching Statistics
+                  </h4>
+                  <div className="grid md:grid-cols-4 gap-4">
+                    <div className="bg-green-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-green-600">{topics.length}</p>
+                      <Label className="text-sm text-green-600">Total Topics</Label>
+                    </div>
+                    <div className="bg-blue-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-blue-600">{topics.filter(t => t.status === 'approved').length}</p>
+                      <Label className="text-sm text-blue-600">Topics Approved</Label>
+                    </div>
+                    <div className="bg-purple-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-purple-600">{reports.length}</p>
+                      <Label className="text-sm text-purple-600">Reports Reviewed</Label>
+                    </div>
+                    <div className="bg-orange-50 p-3 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-orange-600">{reports.filter(r => r.status === 'reviewed').length}</p>
+                      <Label className="text-sm text-orange-600">Reports Graded</Label>
+                    </div>
                   </div>
                 </div>
               </Card>

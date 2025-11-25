@@ -11,7 +11,12 @@ const userSchema = new Schema({
   rollNumber: { type: String },
   department: { type: String },
   year: { type: Number },
-  specialization: { type: String }
+  specialization: { type: String },
+  // Email verification fields
+  isEmailVerified: { type: Boolean, default: false },
+  emailVerificationOTP: { type: String },
+  emailVerificationOTPExpires: { type: Date },
+  emailVerificationAttempts: { type: Number, default: 0 }
 }, {
   timestamps: true
 });

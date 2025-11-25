@@ -10,6 +10,20 @@ export interface User {
   department?: string;
   year?: number;
   specialization?: string;
+  // Additional profile fields
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  joiningDate?: string;
+  qualification?: string;
+  experience?: number;
+  bio?: string;
+  profilePicture?: string;
+  isActive?: boolean;
+  lastLogin?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Topic {
