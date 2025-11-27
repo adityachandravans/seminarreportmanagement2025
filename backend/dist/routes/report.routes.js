@@ -62,32 +62,53 @@ router.get('/', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 0, 
 }));
 // Submit report
 router.post('/', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)(['student']), (req, res, next) => {
+    console.log('📥 POST /api/reports - Starting file upload');
+    console.log('📥 Content-Type:', req.headers['content-type']);
+    console.log('📥 Request body keys:', Object.keys(req.body));
     upload.single('file')(req, res, (err) => {
         if (err instanceof multer_1.default.MulterError) {
+            console.log('❌ Multer error:', err.code, err.message);
             if (err.code === 'LIMIT_FILE_SIZE') {
                 return res.status(400).json({ message: 'File too large. Maximum size is 10MB' });
             }
             return res.status(400).json({ message: `Upload error: ${err.message}` });
         }
         if (err) {
+            console.log('❌ Upload error:', err.message);
             return res.status(400).json({ message: err.message || 'File upload error' });
         }
+        console.log('✅ Multer middleware completed');
+        console.log('✅ req.file exists:', !!req.file);
         next();
     });
 }, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
+        console.log('📥 Report upload request received:', {
+            body: req.body,
+            file: req.file ? {
+                filename: req.file.filename,
+                originalname: req.file.originalname,
+                size: req.file.size,
+                mimetype: req.file.mimetype
+            } : null,
+            user: req.user ? { id: req.user._id, email: req.user.email } : null
+        });
         if (!req.file) {
+            console.log('❌ No file uploaded');
             return res.status(400).json({ message: 'No file uploaded' });
         }
         const { title, topicId } = req.body;
         // Input validation
         if (!title || !topicId) {
+            console.log('❌ Missing required fields:', { title: !!title, topicId: !!topicId });
             return res.status(400).json({ message: 'Title and topicId are required' });
         }
         // Validate ObjectId
+        console.log('🔍 Validating topicId:', { topicId, length: topicId.length, type: typeof topicId });
         if (!topicId.match(/^[0-9a-fA-F]{24}$/)) {
-            return res.status(400).json({ message: 'Invalid topicId format' });
+            console.log('❌ Invalid topicId format:', topicId);
+            return res.status(400).json({ message: `Invalid topicId format: ${topicId}. Expected 24-character hex string.` });
         }
         const report = new report_model_1.default({
             title,
