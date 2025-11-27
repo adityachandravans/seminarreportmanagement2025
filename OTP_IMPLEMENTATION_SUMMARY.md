@@ -63,10 +63,10 @@ The Seminar Management System now includes **OTP (One-Time Password) email verif
 
 #### Environment Variables (`backend/.env`)
 ```env
-SENDGRID_API_KEY=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
+SENDGRID_API_KEY=your_sendgrid_api_key_here
 EMAIL_FROM_NAME=Seminar Report System
-EMAIL_FROM_ADDRESS=chandravanshiaditya25@gmail.com
-EMAIL_REPLY_TO=chandravanshiaditya25@gmail.com
+EMAIL_FROM_ADDRESS=your_email@example.com
+EMAIL_REPLY_TO=your_email@example.com
 FRONTEND_URL=http://localhost:3000
 ```
 
