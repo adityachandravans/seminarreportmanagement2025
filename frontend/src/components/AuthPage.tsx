@@ -96,7 +96,7 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
           // Call onRegister to navigate to OTP page
           await onRegister(registerData);
         } else {
-          // Old flow - direct login (backward compatibility)
+          // Admin - auto-verified, direct login
           localStorage.setItem('authToken', response.token);
           localStorage.setItem('user', JSON.stringify(response.user));
           await onRegister(registerData);
@@ -113,19 +113,8 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
       // Handle role mismatch error (403 Forbidden)
       if (err.response?.status === 403) {
         const registeredRole = err.response?.data?.registeredRole;
-        const requiresVerification = err.response?.data?.requiresVerification;
         
-        if (requiresVerification) {
-          // Email not verified - redirect to OTP page
-          localStorage.setItem('loginData', JSON.stringify({
-            userId: err.response?.data?.userId,
-            email: err.response?.data?.email,
-            requiresVerification: true
-          }));
-          // Call onLogin to navigate to OTP page
-          await onLogin(formData.email, formData.password);
-          return;
-        } else if (registeredRole) {
+        if (registeredRole) {
           setError(`Access denied. This email is registered as a ${registeredRole}. Please login using the ${registeredRole} option.`);
         } else {
           setError(errorMessage);

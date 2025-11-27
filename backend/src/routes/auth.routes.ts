@@ -64,11 +64,17 @@ router.post('/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Generate OTP
-    const otp = generateOTP();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    // Generate OTP for students and teachers (admin gets auto-verified)
+    const requiresVerification = role === 'student' || role === 'teacher';
+    let otp: string | undefined;
+    let otpExpires: Date | undefined;
 
-    // Create new user (not verified yet)
+    if (requiresVerification) {
+      otp = generateOTP();
+      otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    }
+
+    // Create new user
     const user = new User({
       email,
       password: hashedPassword,
@@ -78,7 +84,7 @@ router.post('/register', async (req, res) => {
       department,
       year,
       specialization,
-      isEmailVerified: false,
+      isEmailVerified: !requiresVerification, // Admin auto-verified, others need OTP
       emailVerificationOTP: otp,
       emailVerificationOTPExpires: otpExpires,
       emailVerificationAttempts: 0
@@ -90,16 +96,47 @@ router.post('/register', async (req, res) => {
       email: user.email,
       name: user.name,
       role: user.role,
+      requiresVerification,
       database: user.constructor.name
     });
 
-    // Send OTP email
+    // For admin, create token and send welcome email
+    if (!requiresVerification) {
+      const token = jwt.sign(
+        { userId: user._id },
+        process.env.JWT_SECRET!,
+        { expiresIn: '24h' }
+      );
+
+      try {
+        await emailService.sendWelcomeEmail(email, name, role);
+        console.log('✓ Welcome email sent to:', email);
+      } catch (emailError) {
+        console.error('⚠️ Failed to send welcome email:', emailError);
+      }
+
+      console.log('✓ Admin registration successful (auto-verified)');
+
+      return res.status(201).json({
+        message: 'Registration successful',
+        token,
+        user: {
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          isEmailVerified: user.isEmailVerified
+        }
+      });
+    }
+
+    // For students and teachers, send OTP email
     try {
-      await emailService.sendOTPEmail(email, name, otp);
+      await emailService.sendOTPEmail(email, name, otp!);
       console.log('✓ OTP email sent to:', email);
     } catch (emailError) {
       console.error('⚠️ Failed to send OTP email:', emailError);
-      // Continue registration even if email fails
+      // Continue registration even if email fails - OTP is logged to console
     }
 
     // DEVELOPMENT: Log OTP to console for testing
@@ -108,8 +145,9 @@ router.post('/register', async (req, res) => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('User:', name);
     console.log('Email:', email);
+    console.log('Role:', role);
     console.log('OTP Code:', otp);
-    console.log('Expires:', otpExpires.toLocaleString());
+    console.log('Expires:', otpExpires!.toLocaleString());
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     console.log('✓ Registration successful, OTP sent');
@@ -160,17 +198,6 @@ router.post('/login', async (req, res) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
       return res.status(400).json({ message: 'Invalid credentials' });
-    }
-
-    // Check if email is verified
-    if (!user.isEmailVerified) {
-      console.log(`⚠️ Unverified email login attempt: ${email}`);
-      return res.status(403).json({ 
-        message: 'Please verify your email before logging in.',
-        requiresVerification: true,
-        userId: user._id,
-        email: user.email
-      });
     }
 
     // Role-based access control: Verify the user's role matches the requested role
@@ -233,16 +260,16 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     // Check attempts
-    if (user.emailVerificationAttempts >= 3) {
+    if ((user.emailVerificationAttempts || 0) >= 3) {
       return res.status(400).json({ message: 'Maximum verification attempts exceeded. Please request a new OTP.' });
     }
 
     // Verify OTP
     if (user.emailVerificationOTP !== otp) {
-      user.emailVerificationAttempts += 1;
+      user.emailVerificationAttempts = (user.emailVerificationAttempts || 0) + 1;
       await user.save();
       
-      const remainingAttempts = 3 - user.emailVerificationAttempts;
+      const remainingAttempts = 3 - (user.emailVerificationAttempts || 0);
       return res.status(400).json({ 
         message: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`,
         remainingAttempts

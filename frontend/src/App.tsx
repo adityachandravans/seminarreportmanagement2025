@@ -26,7 +26,7 @@ export default function App() {
       id: topic._id || topic.id,
       title: topic.title,
       description: topic.description,
-      studentId: typeof topic.studentId === 'object' ? (topic.studentId._id || topic.studentId.id) : topic.studentId,
+      studentId: topic.studentId && typeof topic.studentId === 'object' ? (topic.studentId._id || topic.studentId.id) : topic.studentId,
       teacherId: topic.teacherId ? (typeof topic.teacherId === 'object' ? (topic.teacherId._id || topic.teacherId.id) : topic.teacherId) : undefined,
       status: topic.status || 'pending',
       submittedAt: topic.submittedAt || new Date().toISOString().split('T')[0],
@@ -39,8 +39,8 @@ export default function App() {
     return {
       id: report._id || report.id,
       title: report.title,
-      topicId: typeof report.topicId === 'object' ? (report.topicId._id || report.topicId.id) : report.topicId,
-      studentId: typeof report.studentId === 'object' ? (report.studentId._id || report.studentId.id) : report.studentId,
+      topicId: report.topicId && typeof report.topicId === 'object' ? (report.topicId._id || report.topicId.id) : report.topicId,
+      studentId: report.studentId && typeof report.studentId === 'object' ? (report.studentId._id || report.studentId.id) : report.studentId,
       teacherId: report.teacherId ? (typeof report.teacherId === 'object' ? (report.teacherId._id || report.teacherId.id) : report.teacherId) : undefined,
       fileName: report.fileName,
       fileSize: report.fileSize,
@@ -61,8 +61,13 @@ export default function App() {
       ]);
       
       // Normalize MongoDB _id to id for all topics and reports
-      const normalizedTopics = (Array.isArray(topicsData) ? topicsData : []).map(normalizeTopic);
-      const normalizedReports = (Array.isArray(reportsData) ? reportsData : []).map(normalizeReport);
+      // Filter out null/undefined values before normalizing
+      const normalizedTopics = (Array.isArray(topicsData) ? topicsData : [])
+        .filter(t => t != null)
+        .map(normalizeTopic);
+      const normalizedReports = (Array.isArray(reportsData) ? reportsData : [])
+        .filter(r => r != null)
+        .map(normalizeReport);
       
       setTopics(normalizedTopics);
       setReports(normalizedReports);

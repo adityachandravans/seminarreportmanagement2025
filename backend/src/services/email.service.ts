@@ -74,6 +74,7 @@ class EmailService {
       return true;
     } catch (error: any) {
       console.error('❌ Email sending failed:', error.message);
+      
       if (error.response && error.response.body) {
         console.error('   SendGrid Error:', JSON.stringify(error.response.body));
         
@@ -81,9 +82,29 @@ class EmailService {
         if (error.response.body.errors) {
           error.response.body.errors.forEach((err: any) => {
             console.error(`   - ${err.message}`);
+            
+            // Provide specific guidance for common errors
+            if (err.message.includes('Maximum credits exceeded')) {
+              console.error('');
+              console.error('   📧 SendGrid Credits Exhausted:');
+              console.error('   - Free tier: 100 emails/day limit');
+              console.error('   - Solution 1: Wait 24 hours for reset');
+              console.error('   - Solution 2: Upgrade SendGrid plan');
+              console.error('   - Solution 3: Use alternative email service');
+              console.error('   - For now: OTP will be logged to console');
+              console.error('');
+            } else if (err.message.includes('not verified')) {
+              console.error('');
+              console.error('   📧 Sender Not Verified:');
+              console.error('   - Visit: https://app.sendgrid.com/settings/sender_auth');
+              console.error('   - Verify your sender email address');
+              console.error('   - For now: OTP will be logged to console');
+              console.error('');
+            }
           });
         }
       }
+      
       console.warn('⚠️  Email delivery failed - OTP is logged to console for testing');
       return false;
     }

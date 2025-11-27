@@ -10,6 +10,10 @@ export interface User {
   department?: string;
   year?: number;
   specialization?: string;
+  isEmailVerified?: boolean;
+  emailVerificationOTP?: string;
+  emailVerificationOTPExpires?: Date;
+  emailVerificationAttempts?: number;
 }
 
 export interface Topic {

@@ -3,11 +3,15 @@
 import { Topic, SeminarReport, User } from '../types';
 
 export const normalizeTopic = (data: any): Topic => {
+  if (!data) {
+    throw new Error('Cannot normalize null or undefined topic data');
+  }
+  
   return {
     id: data._id || data.id,
     title: data.title,
     description: data.description,
-    studentId: typeof data.studentId === 'object' ? (data.studentId._id || data.studentId.id) : data.studentId,
+    studentId: data.studentId && typeof data.studentId === 'object' ? (data.studentId._id || data.studentId.id) : data.studentId,
     teacherId: data.teacherId ? (typeof data.teacherId === 'object' ? (data.teacherId._id || data.teacherId.id) : data.teacherId) : undefined,
     status: data.status || 'pending',
     submittedAt: data.submittedAt ? new Date(data.submittedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -17,11 +21,15 @@ export const normalizeTopic = (data: any): Topic => {
 };
 
 export const normalizeReport = (data: any): SeminarReport => {
+  if (!data) {
+    throw new Error('Cannot normalize null or undefined report data');
+  }
+  
   return {
     id: data._id || data.id,
     title: data.title,
-    topicId: typeof data.topicId === 'object' ? (data.topicId._id || data.topicId.id) : data.topicId,
-    studentId: typeof data.studentId === 'object' ? (data.studentId._id || data.studentId.id) : data.studentId,
+    topicId: data.topicId && typeof data.topicId === 'object' ? (data.topicId._id || data.topicId.id) : data.topicId,
+    studentId: data.studentId && typeof data.studentId === 'object' ? (data.studentId._id || data.studentId.id) : data.studentId,
     teacherId: data.teacherId ? (typeof data.teacherId === 'object' ? (data.teacherId._id || data.teacherId.id) : data.teacherId) : undefined,
     fileName: data.fileName,
     fileSize: data.fileSize,
