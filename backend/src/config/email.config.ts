@@ -11,7 +11,7 @@ export const createEmailTransporter = () => {
   // For development, use Gmail or Mailtrap
   
   if (process.env.EMAIL_SERVICE === 'gmail') {
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       service: 'gmail',
       auth: {
         user: process.env.EMAIL_USER,
@@ -21,7 +21,7 @@ export const createEmailTransporter = () => {
   }
   
   if (process.env.EMAIL_SERVICE === 'sendgrid') {
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       host: 'smtp.sendgrid.net',
       port: 587,
       auth: {
@@ -32,7 +32,7 @@ export const createEmailTransporter = () => {
   }
   
   // Default SMTP configuration
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '587'),
     secure: process.env.SMTP_SECURE === 'true',

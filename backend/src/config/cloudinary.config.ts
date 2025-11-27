@@ -17,10 +17,10 @@ cloudinary.config({
 // Create Cloudinary storage for Multer
 export const cloudinaryStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: async (req, file) => {
+  params: async (req: any, file: Express.Multer.File) => {
     // Generate unique filename
     const timestamp = Date.now();
-    const userId = (req as any).user?._id || 'unknown';
+    const userId = req.user?._id || 'unknown';
     const originalName = file.originalname.replace(/\s+/g, '_');
     
     return {
