@@ -49,11 +49,13 @@ const app: Express = express();
 const port = parseInt(process.env.PORT || '5000', 10);
 
 // Middleware
-// Configure CORS to accept frontend dev server and backend origin(s).
-// Allow multiple origins via comma-separated `CORS_ORIGIN` in .env (e.g. "http://localhost:3000,http://localhost:5000").
-// Default to common development ports if not specified
-const rawOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:5000';
-const allowedOrigins = rawOrigins.split(',').map(s => s.trim()).filter(Boolean);
+// Configure CORS for production deployment
+// Remove trailing slashes from origins to prevent CORS issues
+const rawOrigins = process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173';
+const allowedOrigins = rawOrigins
+  .split(',')
+  .map(s => s.trim().replace(/\/$/, '')) // Remove trailing slashes
+  .filter(Boolean);
 
 console.log('✓ CORS allowed origins:', allowedOrigins);
 
@@ -61,13 +63,19 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow non-browser tools (Postman, curl) where origin is undefined
     if (!origin) return callback(null, true);
-    // Allow all origins in development if CORS_ORIGIN is empty or contains *
-    if (allowedOrigins.length === 0 || allowedOrigins.includes('*')) {
+    
+    // Remove trailing slash from incoming origin for comparison
+    const normalizedOrigin = origin.replace(/\/$/, '');
+    
+    // Allow all origins in development if CORS_ORIGIN contains *
+    if (allowedOrigins.includes('*')) {
       return callback(null, true);
     }
-    if (allowedOrigins.includes(origin)) {
+    
+    if (allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true);
     }
+    
     // Log CORS rejection for debugging
     console.warn('⚠ CORS blocked origin:', origin);
     return callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
@@ -105,25 +113,7 @@ console.log('   POST   /api/reports');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  const mongoState = mongoose.connection.readyState;
-  const mongoStates = {
-    0: 'disconnected',
-    1: 'connected',
-    2: 'connecting',
-    3: 'disconnecting'
-  };
-  
-  res.json({ 
-    status: 'ok', 
-    message: 'Server is running',
-    mongodb: {
-      state: mongoState,
-      status: mongoStates[mongoState as keyof typeof mongoStates] || 'unknown',
-      connected: mongoState === 1,
-      database: mongoose.connection.db?.databaseName || 'unknown'
-    },
-    port: port
-  });
+  res.json({ status: 'OK' });
 });
 
 // Test endpoint to verify API is working
@@ -138,39 +128,26 @@ app.get('/api/test', (req, res) => {
   });
 });
 
-// Serve frontend static files if available (check multiple candidate build locations)
-const possibleFrontends = [
-  path.join(process.cwd(), 'build'),                  // project-root/build
-  path.join(process.cwd(), 'backend', 'build'),       // backend/build
-  path.join(process.cwd(), 'frontend', 'build'),      // frontend/build
-];
-
-const frontendDist = possibleFrontends.find(p => fs.existsSync(p));
-console.log('Checking for frontend build at:', possibleFrontends[0], possibleFrontends[1], possibleFrontends[2]);
-if (frontendDist) {
-  console.log('✓ Serving frontend from:', frontendDist);
-  app.use(express.static(frontendDist));
-
-  // Fallback to index.html for SPA routes - MUST BE LAST
-  app.get('*', (req, res, next) => {
-    // Don't serve HTML for API routes that weren't matched
-    if (req.path.startsWith('/api/')) {
-      return res.status(404).json({ message: 'API route not found' });
-    }
-
-    const indexPath = path.join(frontendDist, 'index.html');
-    if (fs.existsSync(indexPath)) {
-      res.sendFile(indexPath);
-    } else {
-      next();
+// Backend API only - no frontend serving
+// Frontend is deployed separately on Vercel
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Seminar Management System API', 
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth/*',
+      topics: '/api/topics/*',
+      reports: '/api/reports/*',
+      users: '/api/users/*'
     }
   });
-} else {
-  console.warn('⚠ No frontend build found');
-  app.get('/', (req, res) => {
-    res.json({ message: 'Backend API running', api: '/api/*', health: '/health' });
-  });
-}
+});
+
+// Catch-all for undefined API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ message: 'API endpoint not found', path: req.path });
+});
 
 // Connect to MongoDB and start server
 console.log('Attempting to connect to MongoDB...');
