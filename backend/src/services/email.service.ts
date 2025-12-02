@@ -1,8 +1,8 @@
-import sgMail from '@sendgrid/mail';
+import * as nodemailer from 'nodemailer';
 
 /**
  * Email Service
- * Handles all email sending functionality with SendGrid
+ * Handles all email sending functionality with Gmail SMTP
  */
 
 interface EmailOptions {
@@ -17,26 +17,36 @@ class EmailService {
   private isInitialized: boolean = false;
   private fromEmail: string = '';
   private fromName: string = '';
+  private transporter: any = null;
 
   private initialize() {
     if (this.isInitialized) return;
     
     try {
-      const apiKey = process.env.SENDGRID_API_KEY;
       this.fromEmail = process.env.EMAIL_FROM_ADDRESS || 'noreply@seminarreport.com';
       this.fromName = process.env.EMAIL_FROM_NAME || 'Seminar Report System';
 
-      if (!apiKey) {
-        throw new Error('SENDGRID_API_KEY is not set');
-      }
+      // Check if Gmail is configured
+      if (process.env.EMAIL_SERVICE === 'gmail' && process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
+        this.transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASSWORD,
+          },
+        });
 
-      sgMail.setApiKey(apiKey);
-      console.log('✅ SendGrid email service initialized');
-      console.log('   From:', this.fromEmail);
-      this.isEnabled = true;
-      this.isInitialized = true;
+        console.log('✅ Gmail email service initialized');
+        console.log('   From:', this.fromEmail);
+        console.log('   User:', process.env.EMAIL_USER);
+        this.isEnabled = true;
+        this.isInitialized = true;
+      } else {
+        throw new Error('Gmail not configured (EMAIL_SERVICE, EMAIL_USER, or EMAIL_PASSWORD missing)');
+      }
     } catch (error: any) {
       console.error('❌ Email service initialization failed:', error.message);
+      console.warn('⚠️  Email notifications will be disabled - OTP will be logged to console');
       this.isEnabled = false;
       this.isInitialized = true;
     }
@@ -57,52 +67,39 @@ class EmailService {
     }
 
     try {
-      const msg = {
+      const mailOptions = {
+        from: `"${this.fromName}" <${this.fromEmail}>`,
         to: options.to,
-        from: {
-          email: this.fromEmail,
-          name: this.fromName,
-        },
         subject: options.subject,
         html: options.html,
         text: options.text || this.stripHtml(options.html),
       };
 
-      const response = await sgMail.send(msg);
+      const info = await this.transporter.sendMail(mailOptions);
       console.log('✅ Email sent successfully to:', options.to);
-      console.log('   Message ID:', response[0].headers['x-message-id']);
+      console.log('   Message ID:', info.messageId);
       return true;
     } catch (error: any) {
       console.error('❌ Email sending failed:', error.message);
       
-      if (error.response && error.response.body) {
-        console.error('   SendGrid Error:', JSON.stringify(error.response.body));
-        
-        // Check for specific errors
-        if (error.response.body.errors) {
-          error.response.body.errors.forEach((err: any) => {
-            console.error(`   - ${err.message}`);
-            
-            // Provide specific guidance for common errors
-            if (err.message.includes('Maximum credits exceeded')) {
-              console.error('');
-              console.error('   📧 SendGrid Credits Exhausted:');
-              console.error('   - Free tier: 100 emails/day limit');
-              console.error('   - Solution 1: Wait 24 hours for reset');
-              console.error('   - Solution 2: Upgrade SendGrid plan');
-              console.error('   - Solution 3: Use alternative email service');
-              console.error('   - For now: OTP will be logged to console');
-              console.error('');
-            } else if (err.message.includes('not verified')) {
-              console.error('');
-              console.error('   📧 Sender Not Verified:');
-              console.error('   - Visit: https://app.sendgrid.com/settings/sender_auth');
-              console.error('   - Verify your sender email address');
-              console.error('   - For now: OTP will be logged to console');
-              console.error('');
-            }
-          });
-        }
+      // Provide specific guidance for common errors
+      if (error.message.includes('Invalid login')) {
+        console.error('');
+        console.error('   📧 Gmail Authentication Failed:');
+        console.error('   - Check EMAIL_USER is correct');
+        console.error('   - Check EMAIL_PASSWORD is your app password (not regular password)');
+        console.error('   - Make sure 2-Step Verification is enabled');
+        console.error('   - Generate new app password if needed');
+        console.error('   - For now: OTP will be logged to console');
+        console.error('');
+      } else if (error.message.includes('ECONNREFUSED') || error.message.includes('timeout')) {
+        console.error('');
+        console.error('   📧 Connection Failed:');
+        console.error('   - Check internet connection');
+        console.error('   - Check firewall settings');
+        console.error('   - Gmail SMTP might be blocked');
+        console.error('   - For now: OTP will be logged to console');
+        console.error('');
       }
       
       console.warn('⚠️  Email delivery failed - OTP is logged to console for testing');
@@ -492,6 +489,127 @@ class EmailService {
     return this.sendEmail({
       to,
       subject: '🔐 Your Email Verification Code',
+      html,
+    });
+  }
+
+  /**
+   * Send password reset OTP
+   */
+  async sendPasswordResetOTP(to: string, name: string, otp: string): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .otp-box { background: white; padding: 30px; text-align: center; border-radius: 10px; margin: 30px 0; border: 2px dashed #f59e0b; }
+          .otp-code { font-size: 36px; font-weight: bold; color: #f59e0b; letter-spacing: 8px; font-family: 'Courier New', monospace; }
+          .warning { background: #fef3c7; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔐 Password Reset Request</h1>
+          </div>
+          <div class="content">
+            <h2>Hello ${name},</h2>
+            <p>We received a request to reset your password. Please use the following verification code to reset your password:</p>
+            
+            <div class="otp-box">
+              <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">Your Password Reset Code</p>
+              <div class="otp-code">${otp}</div>
+              <p style="margin: 10px 0 0 0; color: #666; font-size: 12px;">Valid for 10 minutes</p>
+            </div>
+
+            <div class="warning">
+              <strong>🔒 Security Tips:</strong><br>
+              • This code will expire in 10 minutes<br>
+              • Never share this code with anyone<br>
+              • If you didn't request this, please ignore this email<br>
+              • You have 3 attempts to enter the correct code
+            </div>
+
+            <p>If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+            
+            <p style="color: #666; font-size: 14px;">If you're having trouble, please contact our support team.</p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Seminar Report System. All rights reserved.</p>
+            <p>This is an automated email, please do not reply.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to,
+      subject: '🔐 Password Reset Code',
+      html,
+    });
+  }
+
+  /**
+   * Send password reset confirmation
+   */
+  async sendPasswordResetConfirmation(to: string, name: string): Promise<boolean> {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .success-box { background: #d1fae5; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: center; }
+          .warning { background: #fef3c7; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #f59e0b; }
+          .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>✅ Password Reset Successful</h1>
+          </div>
+          <div class="content">
+            <h2>Hello ${name},</h2>
+            <div class="success-box">
+              <h3 style="color: #059669; margin: 0;">Your password has been reset successfully!</h3>
+            </div>
+            <p>Your password was changed on ${new Date().toLocaleString()}.</p>
+            <p>You can now login with your new password.</p>
+            
+            <div class="warning">
+              <strong>⚠️ Security Notice:</strong><br>
+              If you didn't make this change, please contact our support team immediately.
+            </div>
+
+            <p>For security reasons, we recommend:</p>
+            <ul>
+              <li>Use a strong, unique password</li>
+              <li>Don't share your password with anyone</li>
+              <li>Enable two-factor authentication if available</li>
+              <li>Change your password regularly</li>
+            </ul>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Seminar Report System. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    return this.sendEmail({
+      to,
+      subject: '✅ Password Reset Successful',
       html,
     });
   }

@@ -83,6 +83,26 @@ export const authAPI = {
     const response = await apiClient.post('/auth/resend-otp', { userId });
     return response.data;
   },
+
+  forgotPassword: async (email: string) => {
+    const response = await apiClient.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  verifyResetOTP: async (resetId: string, otp: string) => {
+    const response = await apiClient.post('/auth/verify-reset-otp', { resetId, otp });
+    return response.data;
+  },
+
+  resetPassword: async (resetId: string, otp: string, newPassword: string) => {
+    const response = await apiClient.post('/auth/reset-password', { resetId, otp, newPassword });
+    return response.data;
+  },
+
+  resendResetOTP: async (resetId: string) => {
+    const response = await apiClient.post('/auth/resend-reset-otp', { resetId });
+    return response.data;
+  },
 };
 
 // Topic endpoints

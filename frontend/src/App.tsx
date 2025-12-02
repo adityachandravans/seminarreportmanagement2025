@@ -4,13 +4,14 @@ import { UserRole, User, SeminarReport, Topic } from './types';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 import OTPVerification from './components/OTPVerification';
+import ForgotPassword from './components/ForgotPassword';
 import StudentDashboard from './components/StudentDashboard';
 import TeacherDashboard from './components/TeacherDashboard';
 import AdminDashboard from './components/AdminDashboard';
 import { authAPI, topicsAPI, reportsAPI, usersAPI } from './services/api';
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<'landing' | 'auth' | 'otp' | 'dashboard'>('landing');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'auth' | 'otp' | 'dashboard' | 'forgotPassword'>('landing');
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthMode, setIsAuthMode] = useState<'login' | 'register'>('login');
@@ -429,6 +430,7 @@ export default function App() {
               onRegister={handleRegister}
               onModeChange={setIsAuthMode}
               onBack={() => setCurrentPage('landing')}
+              onForgotPassword={() => setCurrentPage('forgotPassword')}
             />
           </motion.div>
         )}
@@ -448,6 +450,24 @@ export default function App() {
               onBack={() => {
                 setCurrentPage('auth');
                 setPendingVerification(null);
+              }}
+            />
+          </motion.div>
+        )}
+
+        {currentPage === 'forgotPassword' && (
+          <motion.div
+            key="forgotPassword"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.3 }}
+          >
+            <ForgotPassword
+              onBack={() => setCurrentPage('auth')}
+              onSuccess={() => {
+                setCurrentPage('auth');
+                setIsAuthMode('login');
               }}
             />
           </motion.div>

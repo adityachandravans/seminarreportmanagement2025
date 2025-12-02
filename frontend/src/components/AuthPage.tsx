@@ -16,9 +16,10 @@ interface AuthPageProps {
   onRegister: (userData: any) => Promise<boolean>;
   onModeChange: (mode: 'login' | 'register') => void;
   onBack: () => void;
+  onForgotPassword?: () => void;
 }
 
-export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange, onBack }: AuthPageProps) {
+export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange, onBack, onForgotPassword }: AuthPageProps) {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -235,6 +236,18 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              {mode === 'login' && onForgotPassword && (
+                <div className="text-right">
+                  <Button
+                    type="button"
+                    variant="link"
+                    onClick={onForgotPassword}
+                    className="p-0 h-auto text-sm text-purple-600 hover:text-purple-700"
+                  >
+                    Forgot Password?
+                  </Button>
+                </div>
+              )}
             </motion.div>
 
             {mode === 'register' && (

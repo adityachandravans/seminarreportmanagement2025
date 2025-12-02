@@ -1,303 +1,301 @@
-# Seminar Management System
+# 📚 Seminar Report Management System
 
-A comprehensive full-stack web application for managing seminar reports with role-based access control for students, teachers, and administrators.
+A comprehensive web application for managing seminar reports with role-based access control for Students, Teachers, and Admins.
 
-## 🚀 Features
+## ✨ Features
 
-### Student Features
-- Register and login with email/password
+### 🔐 Authentication & Security
+- **Email Verification**: All users must verify email with OTP before account creation
+- **Forgot Password**: Complete password reset flow with OTP verification
+- **Role-Based Access**: Separate dashboards for Students, Teachers, and Admins
+- **JWT Authentication**: Secure token-based authentication
+- **Password Hashing**: Bcrypt encryption for all passwords
+
+### 👨‍🎓 Student Features
 - Submit seminar topics for approval
 - Upload seminar reports (PDF)
-- Track topic and report status
-- View feedback from teachers
+- Track submission status
+- View teacher feedback
+- Check grades and approvals
 
-### Teacher Features
-- Review and approve/reject student topics
+### 👨‍🏫 Teacher Features
+- Review student topic submissions
+- Approve/reject topics with feedback
 - Grade seminar reports
-- Provide feedback to students
-- View all students and their submissions
+- Provide detailed feedback
+- View all student submissions
 
-### Admin Features
-- Manage all users (students, teachers)
-- View all topics and reports
-- System-wide oversight
-- User management (edit, delete)
+### 👨‍💼 Admin Features
+- Manage all users (Students, Teachers)
+- View system-wide statistics
+- Monitor all submissions
+- User management (edit/delete)
 
-## 🛠️ Technology Stack
+## 🛠️ Tech Stack
 
 ### Frontend
-- **React 18** with TypeScript
-- **Vite** for fast development and building
-- **TailwindCSS** for styling
+- **React** with TypeScript
+- **Vite** for fast development
+- **Tailwind CSS** for styling
 - **Framer Motion** for animations
-- **Radix UI** for accessible components
+- **Lucide React** for icons
 - **Axios** for API calls
 
 ### Backend
 - **Node.js** with Express
 - **TypeScript** for type safety
-- **MongoDB** with Mongoose ODM
+- **MongoDB** with Mongoose
 - **JWT** for authentication
-- **SendGrid** for email notifications
+- **Bcrypt** for password hashing
+- **Nodemailer** for email sending
 - **Multer** for file uploads
+- **Cloudinary** for file storage
 
 ## 📋 Prerequisites
 
-- Node.js v18 or higher
+- Node.js (v18 or higher)
 - MongoDB (local or Atlas)
-- npm or yarn
-- SendGrid API key (for emails)
+- Gmail account (for email sending)
 
-## 🔧 Installation
+## 🚀 Quick Start
 
-### 1. Clone the repository
+### 1. Clone the Repository
+
 ```bash
-git clone <repository-url>
-cd seminar-management-system
+git clone https://github.com/adityachandravans/seminarreportmanagement2025.git
+cd seminarreportmanagement2025
 ```
 
-### 2. Install dependencies
+### 2. Setup Backend
 
-**Backend:**
 ```bash
 cd backend
 npm install
 ```
 
-**Frontend:**
-```bash
-cd frontend
-npm install
-```
+Create `backend/.env` file:
 
-### 3. Configure environment variables
-
-**Backend** - Create `backend/.env`:
 ```env
 PORT=5000
 MONGODB_URI=mongodb://localhost:27017/seminar_management
-JWT_SECRET=your_jwt_secret_key_change_in_production_2024
-CORS_ORIGIN=http://localhost:3000
-SENDGRID_API_KEY=your_sendgrid_api_key
+JWT_SECRET=your_jwt_secret_key_change_in_production
+CORS_ORIGIN=http://localhost:3000,http://localhost:5173
+
+# Gmail SMTP Configuration
+EMAIL_SERVICE=gmail
+EMAIL_USER=your_gmail@gmail.com
+EMAIL_PASSWORD=your_app_password
 EMAIL_FROM_NAME=Seminar Report System
-EMAIL_FROM_ADDRESS=your_email@example.com
-EMAIL_REPLY_TO=your_email@example.com
+EMAIL_FROM_ADDRESS=your_gmail@gmail.com
+EMAIL_REPLY_TO=your_gmail@gmail.com
+
 FRONTEND_URL=http://localhost:3000
+NODE_ENV=development
 ```
 
-**Frontend** - Create `frontend/.env`:
-```env
-VITE_API_URL=http://localhost:5000/api
-```
+**Note:** For Gmail, you need to generate an App Password. See [GET_APP_PASSWORD.md](GET_APP_PASSWORD.md)
 
-## 🚀 Running the Application
+Build and start backend:
 
-### Development Mode
-
-**Option 1: Using PowerShell script (Windows)**
-```powershell
-.\START_DEV.ps1
-```
-
-**Option 2: Manual start**
-
-Terminal 1 - Backend:
 ```bash
-cd backend
-npm run dev
-```
-
-Terminal 2 - Frontend:
-```bash
-cd frontend
-npm run dev
-```
-
-### Access the application
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:5000/api
-- **Health Check:** http://localhost:5000/health
-
-### Test the system
-```powershell
-.\test-system.ps1
-```
-
-## 📦 Production Deployment
-
-### Build for production
-
-**Frontend:**
-```bash
-cd frontend
-npm run build
-```
-
-**Backend:**
-```bash
-cd backend
 npm run build
 npm start
 ```
 
-### Docker Deployment
+### 3. Setup Frontend
 
 ```bash
-# Copy environment example
-cp .env.example .env
-
-# Edit .env with your production values
-# Then start with Docker Compose
-docker-compose up -d
+cd frontend
+npm install
 ```
 
-See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) for detailed deployment instructions.
+Create `frontend/.env` file:
+
+```env
+VITE_API_URL=http://localhost:5000/api
+```
+
+Start frontend:
+
+```bash
+npm run dev
+```
+
+### 4. Access the Application
+
+Open your browser and go to: **http://localhost:3000**
+
+## 📖 Documentation
+
+### Setup Guides
+- [START_DEVELOPMENT.md](START_DEVELOPMENT.md) - Complete development setup
+- [GMAIL_SETUP_GUIDE.md](GMAIL_SETUP_GUIDE.md) - Gmail SMTP configuration
+- [MONGODB_SETUP_COMPLETE.md](MONGODB_SETUP_COMPLETE.md) - MongoDB setup
+
+### Feature Documentation
+- [EMAIL_VERIFICATION_REQUIRED.md](EMAIL_VERIFICATION_REQUIRED.md) - Email verification flow
+- [FORGOT_PASSWORD_IMPLEMENTED.md](FORGOT_PASSWORD_IMPLEMENTED.md) - Password reset feature
+- [EMAIL_TROUBLESHOOTING.md](EMAIL_TROUBLESHOOTING.md) - Email issues and solutions
+
+### Deployment Guides
+- [DEPLOYMENT_COMPLETE_GUIDE.md](DEPLOYMENT_COMPLETE_GUIDE.md) - Full deployment guide
+- [RENDER_DOCKER_FIX.md](RENDER_DOCKER_FIX.md) - Render deployment
+- [QUICK_DEPLOY_CHECKLIST.md](QUICK_DEPLOY_CHECKLIST.md) - Quick deployment steps
+
+## 🎯 User Roles
+
+### Student
+- Register with email verification
+- Submit seminar topics
+- Upload seminar reports
+- View feedback and grades
+
+### Teacher
+- Register with email verification
+- Review student topics
+- Grade seminar reports
+- Provide feedback
+
+### Admin
+- Register with email verification
+- Manage all users
+- View system statistics
+- Monitor all activities
+
+## 🔒 Security Features
+
+- ✅ Email verification required for all users
+- ✅ OTP-based verification (10-minute expiry)
+- ✅ Password reset with OTP
+- ✅ JWT token authentication
+- ✅ Password hashing with bcrypt
+- ✅ CORS protection
+- ✅ Input validation
+- ✅ Role-based access control
+
+## 📧 Email Features
+
+- ✅ OTP verification emails
+- ✅ Welcome emails
+- ✅ Password reset emails
+- ✅ Report submission confirmations
+- ✅ Professional HTML templates
+- ✅ Gmail SMTP support
+
+## 🧪 Testing
+
+### Backend Health Check
+```bash
+curl http://localhost:5000/health
+```
+
+Expected response:
+```json
+{"status":"OK"}
+```
+
+### Test Registration Flow
+1. Open http://localhost:3000
+2. Click on a role (Student/Teacher/Admin)
+3. Register with your email
+4. Check email for OTP (or backend console)
+5. Verify OTP
+6. Login and use the system!
 
 ## 📁 Project Structure
 
 ```
-seminar-management-system/
+seminarreportmanagement2025/
 ├── backend/
 │   ├── src/
 │   │   ├── config/         # Configuration files
 │   │   ├── middleware/     # Express middleware
-│   │   ├── models/         # MongoDB models
+│   │   ├── models/         # Mongoose models
 │   │   ├── routes/         # API routes
 │   │   ├── services/       # Business logic
-│   │   ├── types/          # TypeScript types
 │   │   └── server.ts       # Entry point
+│   ├── dist/               # Compiled JavaScript
 │   ├── uploads/            # Uploaded files
-│   ├── .env                # Environment variables
 │   └── package.json
-│
 ├── frontend/
 │   ├── src/
 │   │   ├── components/     # React components
 │   │   ├── services/       # API services
 │   │   ├── types/          # TypeScript types
-│   │   ├── utils/          # Utility functions
-│   │   ├── App.tsx         # Main app component
-│   │   └── main.tsx        # Entry point
-│   ├── .env                # Environment variables
+│   │   └── App.tsx         # Main app component
 │   └── package.json
-│
-├── docker-compose.yml      # Docker configuration
-├── DEPLOYMENT_GUIDE.md     # Deployment instructions
-└── README.md               # This file
+└── README.md
 ```
 
-## 🔐 Default User Roles
+## 🚢 Deployment
 
-The system supports three user roles:
+### Backend (Render)
+1. Push code to GitHub
+2. Create new Web Service on Render
+3. Connect GitHub repository
+4. Set environment variables
+5. Deploy!
 
-1. **Student** - Can submit topics and reports
-2. **Teacher** - Can review and grade submissions
-3. **Admin** - Full system access
+See [DEPLOYMENT_COMPLETE_GUIDE.md](DEPLOYMENT_COMPLETE_GUIDE.md) for details.
 
-Users register with their chosen role and are automatically verified.
-
-## 🧪 Testing
-
-### Test system health
-```powershell
-.\test-system.ps1
-```
-
-### Manual API testing
-```bash
-# Health check
-curl http://localhost:5000/health
-
-# Test API
-curl http://localhost:5000/api/test
-```
+### Frontend (Vercel)
+1. Push code to GitHub
+2. Import project on Vercel
+3. Set root directory to `frontend`
+4. Add environment variables
+5. Deploy!
 
 ## 🐛 Troubleshooting
 
-### Backend won't start
-- Ensure MongoDB is running
-- Check `.env` file exists with correct values
-- Verify port 5000 is not in use
+### Email Not Sending
+- Check Gmail app password is correct
+- Verify 2-Step Verification is enabled
+- Check backend console for OTP (backup)
+- See [EMAIL_TROUBLESHOOTING.md](EMAIL_TROUBLESHOOTING.md)
 
-### Frontend can't connect
-- Verify backend is running on port 5000
-- Check `VITE_API_URL` in frontend `.env`
-- Check browser console for CORS errors
+### MongoDB Connection Issues
+- Verify MongoDB is running
+- Check connection string
+- Ensure IP is whitelisted (for Atlas)
+- See [MONGODB_SETUP_COMPLETE.md](MONGODB_SETUP_COMPLETE.md)
 
-### Database errors
-- Verify MongoDB connection string
-- Check MongoDB service is running
-- Test connection: `mongosh "mongodb://localhost:27017/seminar_management"`
+### CORS Errors
+- Check CORS_ORIGIN in backend/.env
+- Ensure no trailing slashes in URLs
+- Verify frontend URL matches
 
-### Port conflicts
-```powershell
-# Check what's using the port
-netstat -ano | findstr :5000
-netstat -ano | findstr :3000
+## 🤝 Contributing
 
-# Kill process if needed
-taskkill /F /PID <process_id>
-```
-
-## 📚 API Documentation
-
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user
-- `GET /api/auth/me` - Get current user
-
-### Topics
-- `GET /api/topics` - Get all topics
-- `POST /api/topics` - Create topic
-- `PUT /api/topics/:id` - Update topic
-- `DELETE /api/topics/:id` - Delete topic
-
-### Reports
-- `GET /api/reports` - Get all reports
-- `POST /api/reports` - Upload report
-- `PUT /api/reports/:id` - Update report
-- `DELETE /api/reports/:id` - Delete report
-- `GET /api/reports/:id/download` - Download report
-
-### Users (Admin only)
-- `GET /api/users` - Get all users
-- `PUT /api/users/:id` - Update user
-- `DELETE /api/users/:id` - Delete user
-
-## 🔒 Security Features
-
-- JWT-based authentication
-- Password hashing with bcrypt
-- CORS protection
-- Input validation
-- File upload restrictions
-- Role-based access control
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ## 📝 License
 
 This project is licensed under the MIT License.
 
-## 🤝 Contributing
+## 👨‍💻 Author
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+**Aditya Chandravanshi**
+- GitHub: [@adityachandravans](https://github.com/adityachandravans)
+- Email: chandravanshiaditya25@gmail.com
 
-## 📧 Support
+## 🙏 Acknowledgments
 
-For issues or questions:
-- Check the [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
-- Review the troubleshooting section above
-- Check application logs
+- React and TypeScript communities
+- MongoDB and Express.js teams
+- All contributors and testers
 
-## ✅ System Status
+## 📞 Support
 
-All systems operational:
-- ✅ Backend running on port 5000
-- ✅ Frontend running on port 3000
-- ✅ MongoDB connected
-- ✅ No TypeScript errors
-- ✅ All tests passing
-- ✅ Deployment ready
+For issues and questions:
+1. Check the documentation files
+2. Review troubleshooting guides
+3. Open an issue on GitHub
+4. Contact the author
 
 ---
 
-**Built with ❤️ for efficient seminar management**
+**Built with ❤️ for efficient seminar report management**
