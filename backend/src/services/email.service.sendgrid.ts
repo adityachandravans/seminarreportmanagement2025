@@ -22,7 +22,7 @@ class EmailService {
 
   private initialize() {
     try {
-      const apiKey = process.env.SENDGRID_API_KEY;
+      const apiKey = process.env.SENDGRID_API_KEY?.trim();
       this.fromEmail = process.env.EMAIL_FROM_ADDRESS || 'noreply@example.com';
       this.fromName = process.env.EMAIL_FROM_NAME || 'Seminar Report System';
 
