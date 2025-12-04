@@ -113,11 +113,27 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    // Check if user has pending registration
-    const existingPending = Array.from(pendingRegistrations.values()).find(p => p.email === email);
-    if (existingPending) {
+    // Check if user has pending registration and clean up expired ones
+    let existingPendingEntry: [string, any] | undefined;
+    for (const [userId, pending] of pendingRegistrations.entries()) {
+      if (pending.email === email) {
+        // Check if OTP has expired
+        if (new Date() > pending.otpExpires) {
+          console.log('Removing expired pending registration:', email);
+          pendingRegistrations.delete(userId);
+        } else {
+          existingPendingEntry = [userId, pending];
+        }
+        break;
+      }
+    }
+    
+    if (existingPendingEntry) {
       console.log('User has pending registration:', email);
-      return res.status(400).json({ message: 'Registration pending. Please verify your email or request a new OTP.' });
+      return res.status(400).json({ 
+        message: 'Registration pending. Please verify your email or request a new OTP.',
+        userId: existingPendingEntry[0]
+      });
     }
 
     // Hash password

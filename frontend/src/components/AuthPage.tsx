@@ -111,8 +111,12 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
       
       const errorMessage = err.response?.data?.message || err.message || 'An error occurred';
       
+      // Handle pending registration
+      if (errorMessage.includes('Registration pending')) {
+        setError('This email has a pending registration. Please use a different email or wait 10 minutes for the previous attempt to expire.');
+      }
       // Handle role mismatch error (403 Forbidden)
-      if (err.response?.status === 403) {
+      else if (err.response?.status === 403) {
         const registeredRole = err.response?.data?.registeredRole;
         
         if (registeredRole) {
