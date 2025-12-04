@@ -165,15 +165,6 @@ router.post('/register', async (req, res) => {
     console.log('  Role:', role);
     console.log('  Temp ID:', tempUserId);
 
-    // Send OTP email
-    try {
-      await emailService.sendOTPEmail(email, name, otp);
-      console.log('✓ OTP email sent to:', email);
-    } catch (emailError) {
-      console.error('⚠️ Failed to send OTP email:', emailError);
-      // Continue registration even if email fails - OTP is logged to console
-    }
-
     // DEVELOPMENT: Log OTP to console for testing
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('📧 EMAIL VERIFICATION OTP');
@@ -187,6 +178,16 @@ router.post('/register', async (req, res) => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     console.log('✓ Registration initiated, OTP sent. User will be saved after verification.');
+
+    // Send OTP email in background (non-blocking)
+    emailService.sendOTPEmail(email, name, otp)
+      .then(() => {
+        console.log('✓ OTP email sent to:', email);
+      })
+      .catch((emailError) => {
+        console.error('⚠️ Failed to send OTP email:', emailError);
+        // OTP is already logged to console, so user can still verify
+      });
 
     res.status(201).json({
       message: 'Registration initiated. Please verify your email with the OTP sent to your email address.',
