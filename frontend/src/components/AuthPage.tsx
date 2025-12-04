@@ -382,16 +382,32 @@ export default function AuthPage({ role, mode, onLogin, onRegister, onModeChange
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                  />
+                  <div className="flex items-center gap-2">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
+                    />
+                    <span>Please wait...</span>
+                  </div>
                 ) : (
                   mode === 'login' ? 'Sign In' : 'Create Account'
                 )}
               </Button>
             </motion.div>
+
+            {/* Cold Start Info */}
+            {isLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-3 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg"
+              >
+                <p className="text-xs text-blue-700 dark:text-blue-300 text-center">
+                  ⏳ First request may take up to 60 seconds as the server wakes up
+                </p>
+              </motion.div>
+            )}
           </form>
 
           {/* Switch Mode */}
