@@ -343,12 +343,14 @@ router.post('/verify-otp', async (req, res) => {
         { expiresIn: '24h' }
       );
 
-      // Send welcome email
-      try {
-        await emailService.sendWelcomeEmail(user.email, user.name, user.role);
-      } catch (emailError) {
-        console.error('⚠️ Failed to send welcome email:', emailError);
-      }
+      // Send welcome email in background (non-blocking)
+      emailService.sendWelcomeEmail(user.email, user.name, user.role)
+        .then(() => {
+          console.log('✓ Welcome email sent to:', user.email);
+        })
+        .catch((emailError) => {
+          console.error('⚠️ Failed to send welcome email:', emailError);
+        });
 
       return res.json({
         message: 'Email verified successfully. Your account has been created.',
@@ -406,14 +408,14 @@ router.post('/resend-otp', async (req, res) => {
       pendingData.otpExpires = otpExpires;
       pendingData.attempts = 0; // Reset attempts
 
-      // Send OTP email
-      try {
-        await emailService.sendOTPEmail(pendingData.email, pendingData.name, otp);
-        console.log('✓ New OTP sent to:', pendingData.email);
-      } catch (emailError) {
-        console.error('⚠️ Failed to send OTP email:', emailError);
-        // Continue even if email fails - OTP is logged to console
-      }
+      // Send OTP email in background (non-blocking)
+      emailService.sendOTPEmail(pendingData.email, pendingData.name, otp)
+        .then(() => {
+          console.log('✓ New OTP sent to:', pendingData.email);
+        })
+        .catch((emailError) => {
+          console.error('⚠️ Failed to send OTP email:', emailError);
+        });
 
       // DEVELOPMENT: Log OTP to console for testing
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -490,13 +492,14 @@ router.post('/forgot-password', async (req, res) => {
       createdAt: new Date()
     });
 
-    // Send OTP email
-    try {
-      await emailService.sendPasswordResetOTP(user.email, user.name, otp);
-      console.log('✓ Password reset OTP sent to:', user.email);
-    } catch (emailError) {
-      console.error('⚠️ Failed to send password reset OTP:', emailError);
-    }
+    // Send OTP email in background (non-blocking)
+    emailService.sendPasswordResetOTP(user.email, user.name, otp)
+      .then(() => {
+        console.log('✓ Password reset OTP sent to:', user.email);
+      })
+      .catch((emailError) => {
+        console.error('⚠️ Failed to send password reset OTP:', emailError);
+      });
 
     // DEVELOPMENT: Log OTP to console
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -621,12 +624,14 @@ router.post('/reset-password', async (req, res) => {
 
     console.log('✅ Password reset successfully for:', user.email);
 
-    // Send confirmation email
-    try {
-      await emailService.sendPasswordResetConfirmation(user.email, user.name);
-    } catch (emailError) {
-      console.error('⚠️ Failed to send password reset confirmation:', emailError);
-    }
+    // Send confirmation email in background (non-blocking)
+    emailService.sendPasswordResetConfirmation(user.email, user.name)
+      .then(() => {
+        console.log('✓ Password reset confirmation sent to:', user.email);
+      })
+      .catch((emailError) => {
+        console.error('⚠️ Failed to send password reset confirmation:', emailError);
+      });
 
     res.json({
       message: 'Password reset successfully. You can now login with your new password.',
@@ -670,13 +675,14 @@ router.post('/resend-reset-otp', async (req, res) => {
     resetData.otpExpires = otpExpires;
     resetData.attempts = 0; // Reset attempts
 
-    // Send OTP email
-    try {
-      await emailService.sendPasswordResetOTP(user.email, user.name, otp);
-      console.log('✓ New password reset OTP sent to:', user.email);
-    } catch (emailError) {
-      console.error('⚠️ Failed to send password reset OTP:', emailError);
-    }
+    // Send OTP email in background (non-blocking)
+    emailService.sendPasswordResetOTP(user.email, user.name, otp)
+      .then(() => {
+        console.log('✓ New password reset OTP sent to:', user.email);
+      })
+      .catch((emailError) => {
+        console.error('⚠️ Failed to send password reset OTP:', emailError);
+      });
 
     // DEVELOPMENT: Log OTP to console
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
