@@ -229,14 +229,18 @@ export default function StudentDashboard({
         selectedTopic: selectedTopic
       });
 
+      // Get API base URL
+      const API_BASE_URL = ((import.meta as any).env?.VITE_API_URL as string) || 'http://localhost:5000/api';
+      const BACKEND_URL = API_BASE_URL.replace('/api', '');
+
       // Test backend connectivity first
       console.log('🔗 Testing backend connectivity...');
       try {
-        const healthResponse = await fetch('http://localhost:5000/health');
+        const healthResponse = await fetch(`${BACKEND_URL}/health`);
         console.log('✅ Backend health check:', healthResponse.status);
       } catch (healthErr) {
         console.error('❌ Backend not reachable:', healthErr);
-        throw new Error('Backend server is not reachable. Please ensure it is running on http://localhost:5000');
+        throw new Error(`Backend server is not reachable. Please ensure it is running on ${BACKEND_URL}`);
       }
 
       // Check authentication
@@ -250,7 +254,7 @@ export default function StudentDashboard({
       // Test reports API endpoint
       console.log('🧪 Testing reports API endpoint...');
       try {
-        const testResponse = await fetch('http://localhost:5000/api/reports', {
+        const testResponse = await fetch(`${API_BASE_URL}/reports`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${authToken}`,
@@ -353,7 +357,8 @@ export default function StudentDashboard({
       } else if (err.code === 'ERR_NETWORK') {
         // Network connection error
         console.error('❌ Network connection error');
-        errorMessage = 'Cannot connect to server. Please check if the backend is running on http://localhost:5000';
+        const API_BASE_URL = ((import.meta as any).env?.VITE_API_URL as string) || 'http://localhost:5000/api';
+        errorMessage = `Cannot connect to server. Please check if the backend is running on ${API_BASE_URL.replace('/api', '')}`;
       } else {
         // Other error
         console.error('❌ Other error type');
