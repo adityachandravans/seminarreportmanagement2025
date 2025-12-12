@@ -215,7 +215,7 @@ export default function AdminDashboard({
 
       <div className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-5 bg-white shadow-sm">
+          <TabsList className="grid w-full grid-cols-6 bg-white shadow-sm">
             <TabsTrigger value="overview">
               <TrendingUp className="h-4 w-4 mr-2" />
               Overview
@@ -223,6 +223,10 @@ export default function AdminDashboard({
             <TabsTrigger value="users">
               <Users className="h-4 w-4 mr-2" />
               Users
+            </TabsTrigger>
+            <TabsTrigger value="teachers">
+              <BookOpen className="h-4 w-4 mr-2" />
+              Teachers
             </TabsTrigger>
             <TabsTrigger value="analytics">
               <BarChart3 className="h-4 w-4 mr-2" />
@@ -468,6 +472,223 @@ export default function AdminDashboard({
                     </Card>
                   </motion.div>
                 ))}
+              </div>
+            </motion.div>
+          </TabsContent>
+
+          <TabsContent value="teachers">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-6"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold">Teacher Management</h2>
+                <div className="flex items-center space-x-4">
+                  <Badge className="bg-green-100 text-green-800 text-lg px-4 py-2">
+                    {teachers.length} Teachers Registered
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Teacher Stats Overview */}
+              <div className="grid md:grid-cols-4 gap-4">
+                <Card className="p-4 bg-white shadow-lg border-0">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-green-100 rounded-full">
+                      <Users className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-green-600">{teachers.length}</p>
+                      <p className="text-sm text-muted-foreground">Total Teachers</p>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="p-4 bg-white shadow-lg border-0">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-blue-100 rounded-full">
+                      <BookOpen className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {topics.filter(t => t.status === 'approved').length}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Topics Approved</p>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="p-4 bg-white shadow-lg border-0">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-purple-100 rounded-full">
+                      <FileText className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-purple-600">
+                        {reports.filter(r => r.status === 'reviewed' || r.status === 'approved').length}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Reports Reviewed</p>
+                    </div>
+                  </div>
+                </Card>
+                <Card className="p-4 bg-white shadow-lg border-0">
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-orange-100 rounded-full">
+                      <Activity className="h-5 w-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-orange-600">
+                        {topics.filter(t => t.status === 'pending').length}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Pending Reviews</p>
+                    </div>
+                  </div>
+                </Card>
+              </div>
+
+              {/* Teacher List */}
+              <Card className="p-6 bg-white shadow-lg border-0">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Users className="h-5 w-5 mr-2 text-green-600" />
+                  All Teachers
+                </h3>
+                {teachers.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No teachers registered yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {teachers.map((teacher, index) => {
+                      // Calculate teacher's activity
+                      const teacherTopicsReviewed = topics.filter(t => 
+                        t.teacherId === teacher.id && (t.status === 'approved' || t.status === 'rejected')
+                      ).length;
+                      const teacherReportsReviewed = reports.filter(r => 
+                        r.teacherId === teacher.id && (r.status === 'reviewed' || r.status === 'approved')
+                      ).length;
+                      
+                      return (
+                        <motion.div
+                          key={teacher.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                          whileHover={{ scale: 1.01 }}
+                        >
+                          <Card className="p-4 bg-gradient-to-r from-green-50 to-teal-50 border border-green-200">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-4">
+                                <div className="p-3 bg-green-100 rounded-full">
+                                  <span className="text-2xl">👨‍🏫</span>
+                                </div>
+                                <div>
+                                  <h4 className="text-lg font-semibold">{teacher.name}</h4>
+                                  <p className="text-sm text-muted-foreground">{teacher.email}</p>
+                                  <div className="flex items-center space-x-3 mt-1">
+                                    {teacher.department && (
+                                      <Badge variant="outline" className="border-green-300 text-green-700">
+                                        {teacher.department}
+                                      </Badge>
+                                    )}
+                                    {teacher.specialization && (
+                                      <span className="text-sm text-muted-foreground">
+                                        {teacher.specialization}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-6">
+                                <div className="text-center">
+                                  <p className="text-xl font-bold text-blue-600">{teacherTopicsReviewed}</p>
+                                  <p className="text-xs text-muted-foreground">Topics Reviewed</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xl font-bold text-purple-600">{teacherReportsReviewed}</p>
+                                  <p className="text-xs text-muted-foreground">Reports Reviewed</p>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditUser(teacher)}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => onDeleteUser(teacher.id)}
+                                    className="text-red-600 border-red-600 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </Card>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+
+              {/* Teacher Activity Summary */}
+              <div className="grid md:grid-cols-2 gap-6">
+                <Card className="p-6 bg-white shadow-lg border-0">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <BookOpen className="h-5 w-5 mr-2 text-blue-600" />
+                    Topic Review Summary
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                      <span className="text-sm font-medium">Approved Topics</span>
+                      <Badge className="bg-green-100 text-green-800">
+                        {topics.filter(t => t.status === 'approved').length}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                      <span className="text-sm font-medium">Pending Topics</span>
+                      <Badge className="bg-yellow-100 text-yellow-800">
+                        {topics.filter(t => t.status === 'pending').length}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                      <span className="text-sm font-medium">Rejected Topics</span>
+                      <Badge className="bg-red-100 text-red-800">
+                        {topics.filter(t => t.status === 'rejected').length}
+                      </Badge>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="p-6 bg-white shadow-lg border-0">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <FileText className="h-5 w-5 mr-2 text-purple-600" />
+                    Report Review Summary
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                      <span className="text-sm font-medium">Reviewed Reports</span>
+                      <Badge className="bg-blue-100 text-blue-800">
+                        {reports.filter(r => r.status === 'reviewed').length}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                      <span className="text-sm font-medium">Approved Reports</span>
+                      <Badge className="bg-green-100 text-green-800">
+                        {reports.filter(r => r.status === 'approved').length}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                      <span className="text-sm font-medium">Pending Reports</span>
+                      <Badge className="bg-yellow-100 text-yellow-800">
+                        {reports.filter(r => r.status === 'submitted').length}
+                      </Badge>
+                    </div>
+                  </div>
+                </Card>
               </div>
             </motion.div>
           </TabsContent>

@@ -365,6 +365,15 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
+    // If not in pending registrations, the registration likely expired or server restarted
+    // Check if userId looks like a valid MongoDB ObjectId before querying
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(404).json({ 
+        message: 'Registration session expired (server may have restarted). Please register again.',
+        expired: true
+      });
+    }
+
     // If not in pending, check if it's an existing user (shouldn't happen with new flow)
     const user = await User.findById(userId);
     if (!user) {
