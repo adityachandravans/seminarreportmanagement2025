@@ -1,8 +1,8 @@
-import { Resend } from 'resend';
+import sgMail from '@sendgrid/mail';
 
 /**
- * Email Service using Resend
- * Modern, reliable email delivery
+ * Email Service using SendGrid
+ * Reliable email delivery that works for all recipients
  */
 
 interface EmailOptions {
@@ -12,7 +12,6 @@ interface EmailOptions {
 }
 
 class EmailService {
-  private resend: Resend | null = null;
   private isEnabled: boolean = false;
   private fromEmail: string = '';
   private fromName: string = '';
@@ -23,17 +22,17 @@ class EmailService {
 
   private initialize() {
     try {
-      const apiKey = process.env.RESEND_API_KEY;
-      this.fromEmail = process.env.EMAIL_FROM_ADDRESS || 'onboarding@resend.dev';
+      const apiKey = process.env.SENDGRID_API_KEY;
+      this.fromEmail = process.env.EMAIL_FROM_ADDRESS || 'chandravanshiaaditya74@gmail.com';
       this.fromName = process.env.EMAIL_FROM_NAME || 'Seminar Report System';
 
       if (apiKey) {
-        this.resend = new Resend(apiKey);
+        sgMail.setApiKey(apiKey);
         this.isEnabled = true;
-        console.log('✅ Resend email service initialized');
+        console.log('✅ SendGrid email service initialized');
         console.log('   From:', this.fromEmail);
       } else {
-        throw new Error('RESEND_API_KEY not configured');
+        throw new Error('SENDGRID_API_KEY not configured');
       }
     } catch (error: any) {
       console.error('❌ Email service initialization failed:', error.message);
@@ -43,28 +42,31 @@ class EmailService {
   }
 
   async sendEmail(options: EmailOptions): Promise<boolean> {
-    if (!this.isEnabled || !this.resend) {
+    if (!this.isEnabled) {
       console.warn('⚠️  Email service disabled - using console OTP');
       return false;
     }
 
     try {
-      const { data, error } = await this.resend.emails.send({
-        from: `${this.fromName} <${this.fromEmail}>`,
-        to: [options.to],
+      const msg = {
+        to: options.to,
+        from: {
+          email: this.fromEmail,
+          name: this.fromName
+        },
         subject: options.subject,
         html: options.html,
-      });
+      };
 
-      if (error) {
-        throw error;
-      }
-
+      const response = await sgMail.send(msg);
       console.log('✅ Email sent successfully to:', options.to);
-      console.log('   Message ID:', data?.id);
+      console.log('   Status:', response[0].statusCode);
       return true;
     } catch (error: any) {
       console.error('❌ Email sending failed:', error.message);
+      if (error.response) {
+        console.error('   SendGrid Error:', error.response.body);
+      }
       console.warn('⚠️  Email delivery failed - OTP logged to console');
       return false;
     }
