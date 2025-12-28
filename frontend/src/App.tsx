@@ -73,19 +73,18 @@ export default function App() {
       setTopics(normalizedTopics);
       setReports(normalizedReports);
       
-      // Load students if user is teacher or admin
+      // Load all users if user is teacher or admin
       if (currentUser && (currentUser.role === 'teacher' || currentUser.role === 'admin')) {
         try {
-          const studentsData = await usersAPI.getAll();
-          const normalizedStudents = (Array.isArray(studentsData) ? studentsData : [])
-            .filter((u: any) => u.role === 'student')
+          const usersData = await usersAPI.getAll();
+          const normalizedUsers = (Array.isArray(usersData) ? usersData : [])
             .map((u: any) => ({
               ...u,
               id: u._id || u.id
             }));
-          setStudents(normalizedStudents);
+          setStudents(normalizedUsers); // This now contains ALL users, not just students
         } catch (error) {
-          console.error('Error loading students:', error);
+          console.error('Error loading users:', error);
         }
       }
     } catch (error) {
@@ -262,7 +261,7 @@ export default function App() {
             user={currentUser}
             topics={topics}
             reports={reports}
-            students={students}
+            students={students.filter(u => u.role === 'student')}
             onLogout={handleLogout}
             onUpdateTopic={async (topicId, updates) => {
               try {

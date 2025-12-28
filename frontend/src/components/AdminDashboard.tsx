@@ -254,7 +254,7 @@ export default function AdminDashboard({
                   { title: 'Total Users', value: users.length, icon: Users, color: 'from-blue-500 to-blue-600' },
                   { title: 'Total Topics', value: topics.length, icon: BookOpen, color: 'from-green-500 to-green-600' },
                   { title: 'Total Reports', value: reports.length, icon: FileText, color: 'from-purple-500 to-purple-600' },
-                  { title: 'Active Sessions', value: '12', icon: Activity, color: 'from-orange-500 to-orange-600' }
+                  { title: 'Teachers', value: teachers.length, icon: Activity, color: 'from-orange-500 to-orange-600' }
                 ].map((stat, index) => (
                   <motion.div
                     key={stat.title}
@@ -826,12 +826,12 @@ export default function AdminDashboard({
                       <Badge className="bg-green-100 text-green-800">Running</Badge>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Last Backup</span>
-                      <span className="text-sm text-muted-foreground">2 hours ago</span>
+                      <span>Total Users</span>
+                      <span className="text-sm text-muted-foreground">{users.length}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span>Active Sessions</span>
-                      <span className="text-sm text-muted-foreground">12</span>
+                      <span>Teachers</span>
+                      <span className="text-sm text-muted-foreground">{teachers.length}</span>
                     </div>
                   </div>
                 </Card>
@@ -866,26 +866,49 @@ export default function AdminDashboard({
               <Card className="p-6 bg-white shadow-lg border-0">
                 <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
                 <div className="space-y-3">
-                  {[
-                    { action: 'New student registered', user: 'John Doe', time: '2 minutes ago' },
-                    { action: 'Topic approved', user: 'Dr. Smith', time: '15 minutes ago' },
-                    { action: 'Report submitted', user: 'Jane Student', time: '1 hour ago' },
-                    { action: 'User updated profile', user: 'Mike Teacher', time: '2 hours ago' }
-                  ].map((activity, index) => (
+                  {/* Show recent topics */}
+                  {topics.slice(-3).reverse().map((topic, index) => (
                     <motion.div
-                      key={index}
+                      key={`topic-${topic.id}`}
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.1 }}
                       className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                     >
                       <div>
-                        <p className="text-sm font-medium">{activity.action}</p>
-                        <p className="text-xs text-muted-foreground">by {activity.user}</p>
+                        <p className="text-sm font-medium">
+                          Topic {topic.status === 'approved' ? 'approved' : topic.status === 'rejected' ? 'rejected' : 'submitted'}: {topic.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          by {users.find(u => u.id === topic.studentId)?.name || 'Student'}
+                        </p>
                       </div>
-                      <span className="text-xs text-muted-foreground">{activity.time}</span>
+                      <span className="text-xs text-muted-foreground">{topic.submittedAt}</span>
                     </motion.div>
                   ))}
+                  {/* Show recent reports */}
+                  {reports.slice(-2).reverse().map((report, index) => (
+                    <motion.div
+                      key={`report-${report.id}`}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: (index + 3) * 0.1 }}
+                      className="flex items-center justify-between p-3 bg-blue-50 rounded-lg"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">
+                          Report {report.status}: {report.title}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          by {users.find(u => u.id === report.studentId)?.name || 'Student'}
+                        </p>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{report.submittedAt}</span>
+                    </motion.div>
+                  ))}
+                  {topics.length === 0 && reports.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+                  )}
                 </div>
               </Card>
             </motion.div>
