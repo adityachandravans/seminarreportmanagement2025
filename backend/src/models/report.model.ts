@@ -9,6 +9,7 @@ const reportSchema = new Schema({
   studentId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   teacherId: { type: Schema.Types.ObjectId, ref: 'User' },
   fileName: { type: String, required: true },
+  fileUrl: { type: String }, // Cloudinary URL for cloud storage
   fileSize: { type: String, required: true },
   submittedAt: { type: Date, default: Date.now },
   status: { 

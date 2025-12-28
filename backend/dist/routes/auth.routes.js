@@ -84,11 +84,27 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
             console.log('User already exists:', email);
             return res.status(400).json({ message: 'User already exists' });
         }
-        // Check if user has pending registration
-        const existingPending = Array.from(pendingRegistrations.values()).find(p => p.email === email);
-        if (existingPending) {
+        // Check if user has pending registration and clean up expired ones
+        let existingPendingEntry;
+        for (const [userId, pending] of pendingRegistrations.entries()) {
+            if (pending.email === email) {
+                // Check if OTP has expired
+                if (new Date() > pending.otpExpires) {
+                    console.log('Removing expired pending registration:', email);
+                    pendingRegistrations.delete(userId);
+                }
+                else {
+                    existingPendingEntry = [userId, pending];
+                }
+                break;
+            }
+        }
+        if (existingPendingEntry) {
             console.log('User has pending registration:', email);
-            return res.status(400).json({ message: 'Registration pending. Please verify your email or request a new OTP.' });
+            return res.status(400).json({
+                message: 'Registration pending. Please verify your email or request a new OTP.',
+                userId: existingPendingEntry[0]
+            });
         }
         // Hash password
         const hashedPassword = yield bcryptjs_1.default.hash(password, 12);
@@ -115,15 +131,6 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.log('  Email:', email);
         console.log('  Role:', role);
         console.log('  Temp ID:', tempUserId);
-        // Send OTP email
-        try {
-            yield email_service_1.emailService.sendOTPEmail(email, name, otp);
-            console.log('✓ OTP email sent to:', email);
-        }
-        catch (emailError) {
-            console.error('⚠️ Failed to send OTP email:', emailError);
-            // Continue registration even if email fails - OTP is logged to console
-        }
         // DEVELOPMENT: Log OTP to console for testing
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('📧 EMAIL VERIFICATION OTP');
@@ -136,6 +143,15 @@ router.post('/register', (req, res) => __awaiter(void 0, void 0, void 0, functio
         console.log('⚠️  USER NOT SAVED TO DATABASE YET');
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('✓ Registration initiated, OTP sent. User will be saved after verification.');
+        // Send OTP email in background (non-blocking)
+        email_service_1.emailService.sendOTPEmail(email, name, otp)
+            .then(() => {
+            console.log('✓ OTP email sent to:', email);
+        })
+            .catch((emailError) => {
+            console.error('⚠️ Failed to send OTP email:', emailError);
+            // OTP is already logged to console, so user can still verify
+        });
         res.status(201).json({
             message: 'Registration initiated. Please verify your email with the OTP sent to your email address.',
             userId: tempUserId,
@@ -260,13 +276,14 @@ router.post('/verify-otp', (req, res) => __awaiter(void 0, void 0, void 0, funct
             });
             // Create token
             const token = jsonwebtoken_1.default.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '24h' });
-            // Send welcome email
-            try {
-                yield email_service_1.emailService.sendWelcomeEmail(user.email, user.name, user.role);
-            }
-            catch (emailError) {
+            // Send welcome email in background (non-blocking)
+            email_service_1.emailService.sendWelcomeEmail(user.email, user.name, user.role)
+                .then(() => {
+                console.log('✓ Welcome email sent to:', user.email);
+            })
+                .catch((emailError) => {
                 console.error('⚠️ Failed to send welcome email:', emailError);
-            }
+            });
             return res.json({
                 message: 'Email verified successfully. Your account has been created.',
                 token,
@@ -277,6 +294,14 @@ router.post('/verify-otp', (req, res) => __awaiter(void 0, void 0, void 0, funct
                     role: user.role,
                     isEmailVerified: user.isEmailVerified
                 }
+            });
+        }
+        // If not in pending registrations, the registration likely expired or server restarted
+        // Check if userId looks like a valid MongoDB ObjectId before querying
+        if (!mongoose_1.default.Types.ObjectId.isValid(userId)) {
+            return res.status(404).json({
+                message: 'Registration session expired (server may have restarted). Please register again.',
+                expired: true
             });
         }
         // If not in pending, check if it's an existing user (shouldn't happen with new flow)
@@ -314,15 +339,14 @@ router.post('/resend-otp', (req, res) => __awaiter(void 0, void 0, void 0, funct
             pendingData.otp = otp;
             pendingData.otpExpires = otpExpires;
             pendingData.attempts = 0; // Reset attempts
-            // Send OTP email
-            try {
-                yield email_service_1.emailService.sendOTPEmail(pendingData.email, pendingData.name, otp);
+            // Send OTP email in background (non-blocking)
+            email_service_1.emailService.sendOTPEmail(pendingData.email, pendingData.name, otp)
+                .then(() => {
                 console.log('✓ New OTP sent to:', pendingData.email);
-            }
-            catch (emailError) {
+            })
+                .catch((emailError) => {
                 console.error('⚠️ Failed to send OTP email:', emailError);
-                // Continue even if email fails - OTP is logged to console
-            }
+            });
             // DEVELOPMENT: Log OTP to console for testing
             console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
             console.log('📧 RESEND OTP');
@@ -390,14 +414,14 @@ router.post('/forgot-password', (req, res) => __awaiter(void 0, void 0, void 0, 
             attempts: 0,
             createdAt: new Date()
         });
-        // Send OTP email
-        try {
-            yield email_service_1.emailService.sendPasswordResetOTP(user.email, user.name, otp);
+        // Send OTP email in background (non-blocking)
+        email_service_1.emailService.sendPasswordResetOTP(user.email, user.name, otp)
+            .then(() => {
             console.log('✓ Password reset OTP sent to:', user.email);
-        }
-        catch (emailError) {
+        })
+            .catch((emailError) => {
             console.error('⚠️ Failed to send password reset OTP:', emailError);
-        }
+        });
         // DEVELOPMENT: Log OTP to console
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('🔐 PASSWORD RESET OTP');
@@ -502,13 +526,14 @@ router.post('/reset-password', (req, res) => __awaiter(void 0, void 0, void 0, f
         // Delete reset request
         passwordResetRequests.delete(resetId);
         console.log('✅ Password reset successfully for:', user.email);
-        // Send confirmation email
-        try {
-            yield email_service_1.emailService.sendPasswordResetConfirmation(user.email, user.name);
-        }
-        catch (emailError) {
+        // Send confirmation email in background (non-blocking)
+        email_service_1.emailService.sendPasswordResetConfirmation(user.email, user.name)
+            .then(() => {
+            console.log('✓ Password reset confirmation sent to:', user.email);
+        })
+            .catch((emailError) => {
             console.error('⚠️ Failed to send password reset confirmation:', emailError);
-        }
+        });
         res.json({
             message: 'Password reset successfully. You can now login with your new password.',
             success: true
@@ -545,14 +570,14 @@ router.post('/resend-reset-otp', (req, res) => __awaiter(void 0, void 0, void 0,
         resetData.otp = otp;
         resetData.otpExpires = otpExpires;
         resetData.attempts = 0; // Reset attempts
-        // Send OTP email
-        try {
-            yield email_service_1.emailService.sendPasswordResetOTP(user.email, user.name, otp);
+        // Send OTP email in background (non-blocking)
+        email_service_1.emailService.sendPasswordResetOTP(user.email, user.name, otp)
+            .then(() => {
             console.log('✓ New password reset OTP sent to:', user.email);
-        }
-        catch (emailError) {
+        })
+            .catch((emailError) => {
             console.error('⚠️ Failed to send password reset OTP:', emailError);
-        }
+        });
         // DEVELOPMENT: Log OTP to console
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('🔐 RESEND PASSWORD RESET OTP');

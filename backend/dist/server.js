@@ -66,7 +66,12 @@ app.use((0, cors_1.default)({
         if (allowedOrigins.includes('*')) {
             return callback(null, true);
         }
+        // Check exact match
         if (allowedOrigins.includes(normalizedOrigin)) {
+            return callback(null, true);
+        }
+        // Allow all Vercel preview deployments (*.vercel.app)
+        if (normalizedOrigin.endsWith('.vercel.app')) {
             return callback(null, true);
         }
         // Log CORS rejection for debugging

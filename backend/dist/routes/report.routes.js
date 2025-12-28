@@ -18,9 +18,12 @@ const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 const report_model_1 = __importDefault(require("../models/report.model"));
 const auth_middleware_1 = require("../middleware/auth.middleware");
+const cloudinary_config_1 = require("../config/cloudinary.config");
 const router = express_1.default.Router();
-// Configure multer for file upload
-const storage = multer_1.default.diskStorage({
+// Check if Cloudinary is configured
+const useCloudinary = (0, cloudinary_config_1.verifyCloudinaryConfig)();
+// Configure local multer for file upload (fallback)
+const localStorage = multer_1.default.diskStorage({
     destination: (req, file, cb) => {
         const uploadDir = path_1.default.resolve(process.cwd(), 'uploads', 'reports');
         if (!fs_1.default.existsSync(uploadDir)) {
@@ -32,8 +35,8 @@ const storage = multer_1.default.diskStorage({
         cb(null, Date.now() + '-' + file.originalname);
     }
 });
-const upload = (0, multer_1.default)({
-    storage,
+const localUpload = (0, multer_1.default)({
+    storage: localStorage,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
     fileFilter: (req, file, cb) => {
         const allowedTypes = ['.pdf', '.doc', '.docx'];
@@ -46,6 +49,8 @@ const upload = (0, multer_1.default)({
         }
     }
 });
+// Use Cloudinary upload if configured, otherwise use local storage
+const upload = useCloudinary ? cloudinary_config_1.cloudinaryUpload : localUpload;
 // Get all reports
 router.get('/', auth_middleware_1.auth, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -84,15 +89,20 @@ router.post('/', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)(['st
 }, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
+        // For Cloudinary uploads, the file object has different properties
+        const fileInfo = req.file;
         console.log('📥 Report upload request received:', {
             body: req.body,
-            file: req.file ? {
-                filename: req.file.filename,
-                originalname: req.file.originalname,
-                size: req.file.size,
-                mimetype: req.file.mimetype
+            file: fileInfo ? {
+                filename: fileInfo.filename || fileInfo.public_id,
+                originalname: fileInfo.originalname,
+                size: fileInfo.size || fileInfo.bytes,
+                mimetype: fileInfo.mimetype,
+                path: fileInfo.path, // Cloudinary URL
+                secure_url: fileInfo.secure_url // Cloudinary secure URL
             } : null,
-            user: req.user ? { id: req.user._id, email: req.user.email } : null
+            user: req.user ? { id: req.user._id, email: req.user.email } : null,
+            usingCloudinary: useCloudinary
         });
         if (!req.file) {
             console.log('❌ No file uploaded');
@@ -110,12 +120,28 @@ router.post('/', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)(['st
             console.log('❌ Invalid topicId format:', topicId);
             return res.status(400).json({ message: `Invalid topicId format: ${topicId}. Expected 24-character hex string.` });
         }
+        // Determine file info based on storage type
+        let fileName;
+        let fileUrl;
+        if (useCloudinary && fileInfo.path) {
+            // Cloudinary upload - store the URL and public_id
+            fileName = fileInfo.public_id || fileInfo.filename;
+            fileUrl = fileInfo.path || fileInfo.secure_url;
+            console.log('☁️ Cloudinary file stored:', { fileName, fileUrl });
+        }
+        else {
+            // Local storage
+            fileName = fileInfo.filename;
+            fileUrl = undefined;
+            console.log('💾 Local file stored:', { fileName });
+        }
         const report = new report_model_1.default({
             title,
             topicId,
             studentId: (_a = req.user) === null || _a === void 0 ? void 0 : _a._id,
-            fileName: req.file.filename,
-            fileSize: String(req.file.size)
+            fileName: fileName,
+            fileUrl: fileUrl, // Store Cloudinary URL
+            fileSize: String(fileInfo.size || fileInfo.bytes || 0)
         });
         const savedReport = yield report.save();
         // Populate the report with related data
@@ -189,9 +215,17 @@ router.get('/:id/download', auth_middleware_1.auth, (req, res) => __awaiter(void
         if (!report) {
             return res.status(404).json({ message: 'Report not found' });
         }
+        // Check if file is stored in Cloudinary (has fileUrl)
+        const reportDoc = report;
+        if (reportDoc.fileUrl) {
+            // Cloudinary file - redirect to the Cloudinary URL
+            console.log('☁️ Redirecting to Cloudinary URL:', reportDoc.fileUrl);
+            return res.redirect(reportDoc.fileUrl);
+        }
+        // Local file storage fallback
         const filePath = path_1.default.resolve(process.cwd(), 'uploads', 'reports', report.fileName);
         if (!fs_1.default.existsSync(filePath)) {
-            return res.status(404).json({ message: 'File not found' });
+            return res.status(404).json({ message: 'File not found. The file may have been deleted due to server restart. Please re-upload the report.' });
         }
         res.download(filePath);
     }
@@ -219,11 +253,20 @@ router.delete('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, vo
             return res.status(403).json({ message: 'Not authorized' });
         }
         // Delete file from storage
-        const filePath = path_1.default.resolve(process.cwd(), 'uploads', 'reports', report.fileName);
-        if (fs_1.default.existsSync(filePath)) {
-            fs_1.default.unlinkSync(filePath);
+        const reportDoc = report;
+        if (reportDoc.fileUrl && useCloudinary) {
+            // Delete from Cloudinary
+            yield cloudinary_config_1.cloudinaryUtils.deleteFile(report.fileName);
+        }
+        else {
+            // Delete from local storage
+            const filePath = path_1.default.resolve(process.cwd(), 'uploads', 'reports', report.fileName);
+            if (fs_1.default.existsSync(filePath)) {
+                fs_1.default.unlinkSync(filePath);
+            }
         }
         yield report_model_1.default.findByIdAndDelete(id);
+        res.json({ message: 'Report deleted successfully' });
         res.json({ message: 'Report deleted successfully' });
     }
     catch (error) {
