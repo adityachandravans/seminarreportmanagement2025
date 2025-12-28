@@ -230,9 +230,13 @@ router.get('/:id/download', auth, async (req, res) => {
     // Check if file is stored in Cloudinary (has fileUrl)
     const reportDoc = report as any;
     if (reportDoc.fileUrl) {
-      // Cloudinary file - redirect to the Cloudinary URL
-      console.log('☁️ Redirecting to Cloudinary URL:', reportDoc.fileUrl);
-      return res.redirect(reportDoc.fileUrl);
+      // Cloudinary file - return the URL for frontend to download directly
+      console.log('☁️ Returning Cloudinary URL:', reportDoc.fileUrl);
+      return res.json({ 
+        downloadUrl: reportDoc.fileUrl,
+        fileName: report.fileName,
+        isCloudinary: true
+      });
     }
 
     // Local file storage fallback
@@ -286,7 +290,6 @@ router.delete('/:id', auth, async (req, res) => {
     }
 
     await Report.findByIdAndDelete(id);
-    res.json({ message: 'Report deleted successfully' });
     res.json({ message: 'Report deleted successfully' });
   } catch (error: any) {
     console.error('Report deletion error:', error.message);

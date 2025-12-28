@@ -21,14 +21,15 @@ export const cloudinaryStorage = new CloudinaryStorage({
     // Generate unique filename
     const timestamp = Date.now();
     const userId = req.user?._id || 'unknown';
-    const originalName = file.originalname.replace(/\s+/g, '_');
+    // Remove file extension and spaces from original name
+    const originalName = file.originalname.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_');
     
     return {
       folder: 'seminar-reports', // Cloudinary folder
-      format: 'pdf', // Force PDF format
       public_id: `${userId}_${timestamp}_${originalName}`,
-      resource_type: 'raw' as const, // For non-image files
-      allowed_formats: ['pdf', 'doc', 'docx'],
+      resource_type: 'raw' as const, // For non-image files (PDF, DOC, DOCX)
+      type: 'upload' as const, // Public access (not authenticated)
+      access_mode: 'public' as const, // Make files publicly accessible
     };
   },
 });

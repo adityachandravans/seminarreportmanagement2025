@@ -444,18 +444,21 @@ export default function TeacherDashboard({
                               size="sm"
                               onClick={async () => {
                                 try {
-                                  const blob = await reportsAPI.download(report.id);
-                                  const url = window.URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = report.fileName;
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  window.URL.revokeObjectURL(url);
-                                  document.body.removeChild(a);
+                                  const result = await reportsAPI.download(report.id);
+                                  // If result is null, it means Cloudinary URL was opened in new tab
+                                  if (result) {
+                                    const url = window.URL.createObjectURL(result);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = report.fileName;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                    document.body.removeChild(a);
+                                  }
                                 } catch (error) {
                                   console.error('Error downloading report:', error);
-                                  alert('Failed to download report');
+                                  alert('Failed to download report. The file may have been deleted.');
                                 }
                               }}
                             >

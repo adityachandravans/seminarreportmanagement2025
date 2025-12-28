@@ -218,9 +218,13 @@ router.get('/:id/download', auth_middleware_1.auth, (req, res) => __awaiter(void
         // Check if file is stored in Cloudinary (has fileUrl)
         const reportDoc = report;
         if (reportDoc.fileUrl) {
-            // Cloudinary file - redirect to the Cloudinary URL
-            console.log('☁️ Redirecting to Cloudinary URL:', reportDoc.fileUrl);
-            return res.redirect(reportDoc.fileUrl);
+            // Cloudinary file - return the URL for frontend to download directly
+            console.log('☁️ Returning Cloudinary URL:', reportDoc.fileUrl);
+            return res.json({
+                downloadUrl: reportDoc.fileUrl,
+                fileName: report.fileName,
+                isCloudinary: true
+            });
         }
         // Local file storage fallback
         const filePath = path_1.default.resolve(process.cwd(), 'uploads', 'reports', report.fileName);
@@ -266,7 +270,6 @@ router.delete('/:id', auth_middleware_1.auth, (req, res) => __awaiter(void 0, vo
             }
         }
         yield report_model_1.default.findByIdAndDelete(id);
-        res.json({ message: 'Report deleted successfully' });
         res.json({ message: 'Report deleted successfully' });
     }
     catch (error) {
