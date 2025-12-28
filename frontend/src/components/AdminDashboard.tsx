@@ -29,14 +29,7 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-
-// Extend jsPDF type for autotable
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
-}
+import autoTable from 'jspdf-autotable';
 
 interface AdminDashboardProps {
   user: User;
@@ -192,7 +185,7 @@ export default function AdminDashboard({
     doc.setTextColor(0, 0, 0);
     doc.text('User Statistics', 20, 55);
     
-    doc.autoTable({
+    autoTable(doc, {
       startY: 60,
       head: [['Category', 'Count']],
       body: [
@@ -211,7 +204,7 @@ export default function AdminDashboard({
     doc.setFontSize(16);
     doc.text('Topic Statistics', 20, currentY);
     
-    doc.autoTable({
+    autoTable(doc, {
       startY: currentY + 5,
       head: [['Status', 'Count', 'Percentage']],
       body: [
@@ -233,7 +226,7 @@ export default function AdminDashboard({
     doc.setFontSize(16);
     doc.text('Report Statistics', 20, currentY);
     
-    doc.autoTable({
+    autoTable(doc, {
       startY: currentY + 5,
       head: [['Status', 'Count', 'Percentage']],
       body: [
@@ -259,7 +252,7 @@ export default function AdminDashboard({
     doc.text('Registered Teachers', 20, 20);
     
     if (teachers.length > 0) {
-      doc.autoTable({
+      autoTable(doc, {
         startY: 25,
         head: [['Name', 'Email', 'Department', 'Specialization']],
         body: teachers.map(t => [
@@ -283,7 +276,7 @@ export default function AdminDashboard({
     doc.text('Registered Students', 20, currentY);
     
     if (students.length > 0) {
-      doc.autoTable({
+      autoTable(doc, {
         startY: currentY + 5,
         head: [['Name', 'Email', 'Roll Number', 'Department', 'Year']],
         body: students.map(s => [
@@ -310,7 +303,7 @@ export default function AdminDashboard({
     doc.text('All Submitted Topics', 20, 20);
     
     if (topics.length > 0) {
-      doc.autoTable({
+      autoTable(doc, {
         startY: 25,
         head: [['Title', 'Student', 'Status', 'Submitted Date']],
         body: topics.map(t => {
@@ -350,7 +343,7 @@ export default function AdminDashboard({
     doc.text('All Submitted Reports', 20, currentY);
     
     if (reports.length > 0) {
-      doc.autoTable({
+      autoTable(doc, {
         startY: currentY + 5,
         head: [['Title', 'Student', 'Status', 'Grade', 'Submitted Date']],
         body: reports.map(r => {
