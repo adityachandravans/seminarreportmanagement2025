@@ -28,6 +28,15 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+// Extend jsPDF type for autotable
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+  }
+}
 
 interface AdminDashboardProps {
   user: User;
@@ -151,29 +160,241 @@ export default function AdminDashboard({
   };
 
   const generateReport = () => {
-    const reportData = {
-      totalUsers: users.length,
-      students: students.length,
-      teachers: teachers.length,
-      topics: {
-        total: topics.length,
-        approved: topics.filter(t => t.status === 'approved').length,
-        pending: topics.filter(t => t.status === 'pending').length,
-        rejected: topics.filter(t => t.status === 'rejected').length
-      },
-      reports: {
-        total: reports.length,
-        reviewed: reports.filter(r => r.status === 'reviewed').length,
-        pending: reports.filter(r => r.status === 'submitted').length
-      }
-    };
-
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `system-report-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const today = new Date().toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    
+    // Title
+    doc.setFontSize(24);
+    doc.setTextColor(41, 128, 185);
+    doc.text('Seminar Report Management System', pageWidth / 2, 20, { align: 'center' });
+    
+    // Subtitle
+    doc.setFontSize(14);
+    doc.setTextColor(100, 100, 100);
+    doc.text('System Report', pageWidth / 2, 30, { align: 'center' });
+    
+    // Date
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${today}`, pageWidth / 2, 38, { align: 'center' });
+    
+    // Horizontal line
+    doc.setDrawColor(41, 128, 185);
+    doc.setLineWidth(0.5);
+    doc.line(20, 45, pageWidth - 20, 45);
+    
+    // Section: User Statistics
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    doc.text('User Statistics', 20, 55);
+    
+    doc.autoTable({
+      startY: 60,
+      head: [['Category', 'Count']],
+      body: [
+        ['Total Users', users.length.toString()],
+        ['Students', students.length.toString()],
+        ['Teachers', teachers.length.toString()],
+        ['Administrators', admins.length.toString()],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [41, 128, 185] },
+      margin: { left: 20, right: 20 },
+    });
+    
+    // Section: Topic Statistics
+    let currentY = (doc as any).lastAutoTable.finalY + 15;
+    doc.setFontSize(16);
+    doc.text('Topic Statistics', 20, currentY);
+    
+    doc.autoTable({
+      startY: currentY + 5,
+      head: [['Status', 'Count', 'Percentage']],
+      body: [
+        ['Total Topics', topics.length.toString(), '100%'],
+        ['Approved', topics.filter(t => t.status === 'approved').length.toString(), 
+          `${topics.length > 0 ? ((topics.filter(t => t.status === 'approved').length / topics.length) * 100).toFixed(1) : 0}%`],
+        ['Pending', topics.filter(t => t.status === 'pending').length.toString(),
+          `${topics.length > 0 ? ((topics.filter(t => t.status === 'pending').length / topics.length) * 100).toFixed(1) : 0}%`],
+        ['Rejected', topics.filter(t => t.status === 'rejected').length.toString(),
+          `${topics.length > 0 ? ((topics.filter(t => t.status === 'rejected').length / topics.length) * 100).toFixed(1) : 0}%`],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [46, 204, 113] },
+      margin: { left: 20, right: 20 },
+    });
+    
+    // Section: Report Statistics
+    currentY = (doc as any).lastAutoTable.finalY + 15;
+    doc.setFontSize(16);
+    doc.text('Report Statistics', 20, currentY);
+    
+    doc.autoTable({
+      startY: currentY + 5,
+      head: [['Status', 'Count', 'Percentage']],
+      body: [
+        ['Total Reports', reports.length.toString(), '100%'],
+        ['Submitted', reports.filter(r => r.status === 'submitted').length.toString(),
+          `${reports.length > 0 ? ((reports.filter(r => r.status === 'submitted').length / reports.length) * 100).toFixed(1) : 0}%`],
+        ['Reviewed', reports.filter(r => r.status === 'reviewed').length.toString(),
+          `${reports.length > 0 ? ((reports.filter(r => r.status === 'reviewed').length / reports.length) * 100).toFixed(1) : 0}%`],
+        ['Approved', reports.filter(r => r.status === 'approved').length.toString(),
+          `${reports.length > 0 ? ((reports.filter(r => r.status === 'approved').length / reports.length) * 100).toFixed(1) : 0}%`],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [155, 89, 182] },
+      margin: { left: 20, right: 20 },
+    });
+    
+    // New page for detailed lists
+    doc.addPage();
+    
+    // Section: Teacher List
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    doc.text('Registered Teachers', 20, 20);
+    
+    if (teachers.length > 0) {
+      doc.autoTable({
+        startY: 25,
+        head: [['Name', 'Email', 'Department', 'Specialization']],
+        body: teachers.map(t => [
+          t.name,
+          t.email,
+          t.department || 'N/A',
+          t.specialization || 'N/A'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [39, 174, 96] },
+        margin: { left: 20, right: 20 },
+      });
+    } else {
+      doc.setFontSize(10);
+      doc.text('No teachers registered yet.', 20, 30);
+    }
+    
+    // Section: Student List
+    currentY = teachers.length > 0 ? (doc as any).lastAutoTable.finalY + 15 : 45;
+    doc.setFontSize(16);
+    doc.text('Registered Students', 20, currentY);
+    
+    if (students.length > 0) {
+      doc.autoTable({
+        startY: currentY + 5,
+        head: [['Name', 'Email', 'Roll Number', 'Department', 'Year']],
+        body: students.map(s => [
+          s.name,
+          s.email,
+          s.rollNumber || 'N/A',
+          s.department || 'N/A',
+          s.year?.toString() || 'N/A'
+        ]),
+        theme: 'striped',
+        headStyles: { fillColor: [52, 152, 219] },
+        margin: { left: 20, right: 20 },
+      });
+    } else {
+      doc.setFontSize(10);
+      doc.text('No students registered yet.', 20, currentY + 10);
+    }
+    
+    // New page for topics
+    doc.addPage();
+    
+    // Section: All Topics
+    doc.setFontSize(16);
+    doc.text('All Submitted Topics', 20, 20);
+    
+    if (topics.length > 0) {
+      doc.autoTable({
+        startY: 25,
+        head: [['Title', 'Student', 'Status', 'Submitted Date']],
+        body: topics.map(t => {
+          const student = users.find(u => u.id === t.studentId);
+          return [
+            t.title.substring(0, 40) + (t.title.length > 40 ? '...' : ''),
+            student?.name || 'Unknown',
+            t.status.toUpperCase(),
+            t.submittedAt || 'N/A'
+          ];
+        }),
+        theme: 'striped',
+        headStyles: { fillColor: [46, 204, 113] },
+        margin: { left: 20, right: 20 },
+        columnStyles: {
+          0: { cellWidth: 60 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 40 },
+        },
+      });
+    } else {
+      doc.setFontSize(10);
+      doc.text('No topics submitted yet.', 20, 30);
+    }
+    
+    // Section: All Reports
+    currentY = topics.length > 0 ? (doc as any).lastAutoTable.finalY + 15 : 45;
+    
+    // Check if we need a new page
+    if (currentY > 200) {
+      doc.addPage();
+      currentY = 20;
+    }
+    
+    doc.setFontSize(16);
+    doc.text('All Submitted Reports', 20, currentY);
+    
+    if (reports.length > 0) {
+      doc.autoTable({
+        startY: currentY + 5,
+        head: [['Title', 'Student', 'Status', 'Grade', 'Submitted Date']],
+        body: reports.map(r => {
+          const student = users.find(u => u.id === r.studentId);
+          return [
+            r.title.substring(0, 35) + (r.title.length > 35 ? '...' : ''),
+            student?.name || 'Unknown',
+            r.status.toUpperCase(),
+            r.grade || 'N/A',
+            r.submittedAt || 'N/A'
+          ];
+        }),
+        theme: 'striped',
+        headStyles: { fillColor: [155, 89, 182] },
+        margin: { left: 20, right: 20 },
+        columnStyles: {
+          0: { cellWidth: 50 },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 35 },
+        },
+      });
+    } else {
+      doc.setFontSize(10);
+      doc.text('No reports submitted yet.', 20, currentY + 10);
+    }
+    
+    // Footer on all pages
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        `Page ${i} of ${pageCount} | Seminar Report Management System | Generated: ${today}`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: 'center' }
+      );
+    }
+    
+    // Save the PDF
+    doc.save(`system-report-${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   return (
