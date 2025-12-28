@@ -40,6 +40,7 @@ const reportSchema = new mongoose_1.Schema({
     studentId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
     teacherId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
     fileName: { type: String, required: true },
+    originalFileName: { type: String }, // Original filename with extension for download
     fileUrl: { type: String }, // Cloudinary URL for cloud storage
     fileSize: { type: String, required: true },
     submittedAt: { type: Date, default: Date.now },

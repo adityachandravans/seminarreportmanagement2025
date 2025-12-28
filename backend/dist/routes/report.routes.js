@@ -123,23 +123,25 @@ router.post('/', auth_middleware_1.auth, (0, auth_middleware_1.requireRole)(['st
         // Determine file info based on storage type
         let fileName;
         let fileUrl;
+        const originalFileName = fileInfo.originalname; // Store original filename with extension
         if (useCloudinary && fileInfo.path) {
             // Cloudinary upload - store the URL and public_id
             fileName = fileInfo.public_id || fileInfo.filename;
             fileUrl = fileInfo.path || fileInfo.secure_url;
-            console.log('☁️ Cloudinary file stored:', { fileName, fileUrl });
+            console.log('☁️ Cloudinary file stored:', { fileName, fileUrl, originalFileName });
         }
         else {
             // Local storage
             fileName = fileInfo.filename;
             fileUrl = undefined;
-            console.log('💾 Local file stored:', { fileName });
+            console.log('💾 Local file stored:', { fileName, originalFileName });
         }
         const report = new report_model_1.default({
             title,
             topicId,
             studentId: (_a = req.user) === null || _a === void 0 ? void 0 : _a._id,
             fileName: fileName,
+            originalFileName: originalFileName, // Store original filename for download
             fileUrl: fileUrl, // Store Cloudinary URL
             fileSize: String(fileInfo.size || fileInfo.bytes || 0)
         });
@@ -222,7 +224,7 @@ router.get('/:id/download', auth_middleware_1.auth, (req, res) => __awaiter(void
             console.log('☁️ Returning Cloudinary URL:', reportDoc.fileUrl);
             return res.json({
                 downloadUrl: reportDoc.fileUrl,
-                fileName: report.fileName,
+                fileName: reportDoc.originalFileName || report.fileName, // Use original filename
                 isCloudinary: true
             });
         }
