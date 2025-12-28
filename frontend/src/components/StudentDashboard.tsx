@@ -801,12 +801,11 @@ export default function StudentDashboard({
                           onClick={async () => {
                             try {
                               const result = await reportsAPI.download(report.id);
-                              // If result is null, it means Cloudinary URL was opened in new tab
-                              if (result) {
-                                const url = window.URL.createObjectURL(result);
+                              if (result && result.blob) {
+                                const url = window.URL.createObjectURL(result.blob);
                                 const a = document.createElement('a');
                                 a.href = url;
-                                a.download = report.fileName;
+                                a.download = result.fileName || report.fileName;
                                 document.body.appendChild(a);
                                 a.click();
                                 window.URL.revokeObjectURL(url);

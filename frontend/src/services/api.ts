@@ -213,18 +213,19 @@ export const reportsAPI = {
     // First get the download info from backend
     const response = await apiClient.get(`/reports/${id}/download`);
     
-    // If it's a Cloudinary file, open the URL directly
+    // If it's a Cloudinary file, fetch and download it
     if (response.data.isCloudinary && response.data.downloadUrl) {
-      // Open in new tab for download
-      window.open(response.data.downloadUrl, '_blank');
-      return null;
+      // Fetch the file from Cloudinary
+      const fileResponse = await fetch(response.data.downloadUrl);
+      const blob = await fileResponse.blob();
+      return { blob, fileName: response.data.fileName };
     }
     
     // For local files, download as blob
     const blobResponse = await apiClient.get(`/reports/${id}/download`, {
       responseType: 'blob',
     });
-    return blobResponse.data;
+    return { blob: blobResponse.data, fileName: null };
   },
 };
 
